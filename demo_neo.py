@@ -40,8 +40,8 @@ from recognize_chinese.mapper import Mapper as Mapper_chinese
 from cfgs.config import cfg
 
 ## lm
-from lm_prefix_beam_search import prefix_beam_search
-import kenlm
+# from lm_prefix_beam_search import prefix_beam_search
+# import kenlm
 
 
 
@@ -185,52 +185,24 @@ def extract_frames(inputs, label):
     # print(len(frame_idx))
     # print("----")
     frame_idx = []
-    y_list = []
-    n_list = []
-    tem_list = []
-    is_newLine = True
-
-    id_count = 0
-    while (id_count < len(label)):
-        
-        tem_list = label[id_count:id_count+5]
-        id_count += 5
-        if 0 in tem_list and 1 in tem_list:
-            is_newLine = True
-            n_list.clear()
-            continue
-        elif 0 in tem_list:
-            continue
+    list_1 = []
+    list_0 = []
+    for idx, lb in enumerate(label):
+        if lb:
+            list_1.append(idx)
         else:
-            n_list.extend(tem_list)
-            if len(n_list) >= 9 and is_newLine :
-                frame_idx.extend(range(id_count-5, id_count))
-                is_newLine = False
-                n_list.clear()
+            if len(list_1) <=5:
+                list_1.clear()
+                continue
+            else:
+                corr_num = math.floor(len(list_1)*0.6)
+                frame_idx.extend(list_1[(len(list_1)//2-corr_num//2):(len(list_1)//2+corr_num//2+1)])
+                list_1.clear()
+    if len(list_1) >= 5:
+        corr_num = math.floor(len(list_1)*0.6)
+        frame_idx.extend(list_1[(len(list_1)//2-corr_num//2):(len(list_1)//2+corr_num//2+1)])
+        list_1.clear()
 
-    # print(len(frame_idx))
-
-
-
-    # for idx, lb in enumerate(label):
-    #     if lb and is_newLine:
-    #         y_list.append(lb)
-            
-    #     else:
-    #         n_list.append(lb)
-
-    #     if len(n_list)< 10:
-    #         continue
-    #     else:
-    #         frame_idx.extend(y_list[0:math.floor(len(y_list)*0.5)])
-    #         y_list.clear()
-    #         is_newLine = False
-
-
-
-
-
-    # split into pieces
     frame_idxss = [list(map(itemgetter(1), g)) for k, g in groupby(enumerate(frame_idx), lambda x: x[0]-x[1])]
     max_blurry_idxs = []
     # for each piece, find max-blurry index
@@ -584,10 +556,10 @@ def detect_text_area(inputs, pred_func, enlarge_ratio=1.2):
                 ycenter = (ymin + ymax) / 2
                 width = (xmax - xmin) * enlarge_ratio
                 height = (ymax - ymin) * enlarge_ratio
-                xmin = np.max([0, int(xcenter - width / 2) -10])
-                ymin = np.max([0, int(ycenter - height / 2)])
-                xmax = np.min([ori_width - 1, int(xcenter + width / 2) + 10])
-                ymax = np.min([ori_height - 1, int(ycenter + height / 2)])
+                xmin = np.max([0, int(xcenter - width / 2)]) + 10
+                ymin = np.max([0, int(ycenter - height / 2)]) + 20
+                xmax = np.min([ori_width - 1, int(xcenter + width / 2)]) - 10
+                ymax = np.min([ori_height - 1, int(ycenter + height / 2)]) - 20
 
                 cropped_img = img[ymin:ymax, xmin:xmax]
                 det_area = [xmin, ymin, xmax, ymax]
@@ -1000,10 +972,11 @@ def recognize_sequences(inputs, pred_func, cfg_recognize_sequences, lm_model):
 
     def postprocess(preds, cfg_recognize_sequences = cfg_recognize_sequences):
         # mapper = Mapper()
-        # return [mapper.decode_output(i) for i in preds]
+        mapper = lm_model()
+        return [mapper.decode_output(i) for i in preds]
         # pdb.set_trace()
-        print("total", str(len(preds)), "sentences for language model ...")
-        return [prefix_beam_search(i, cfg=cfg_recognize_sequences, lm=lm_model) for i in preds]
+        # print("total", str(len(preds)), "sentences for language model ...")
+        # return [prefix_beam_search(i, cfg=cfg_recognize_sequences, lm=lm_model) for i in preds]
 
     input_height = cfg_recognize_sequences.input_height
     input_width = cfg_recognize_sequences.input_width
@@ -1012,12 +985,12 @@ def recognize_sequences(inputs, pred_func, cfg_recognize_sequences, lm_model):
     preprocessed = preprocess(inputs)
     batches = _batch_data(preprocessed, batch_size)
    
-    batched_preds = [pred_func(i)[0] for i in batches]
+    batched_preds = [pred_func(i)[1] for i in batches]
     print(batched_preds[0].shape)
     preds = [j for i in batched_preds for j in i]
-    start_time_rec = time.time()
+    # start_time_rec = time.time()
     postprocessed = postprocess(preds)
-    print("language model time: ", str(time.time() - start_time_rec))
+    # print("language model time: ", str(time.time() - start_time_rec))
     return postprocessed
 
 
@@ -1072,11 +1045,11 @@ class Extractor():
             print('start restore recognize_chinese-----------------------')
             self.predictor_recognize_chinese = OfflinePredictor(config_recognize_chinese)
             
-            print('start restore english language model-----------------------')
-            self.english_lm_model = kenlm.LanguageModel('models/english_lm.arpa')
+            # print('start restore english language model-----------------------')
+            # self.english_lm_model = kenlm.LanguageModel('models/english_lm.arpa')
 
-            print('start restore chinese language model-----------------------')
-            self.chinese_lm_model = kenlm.LanguageModel('models/chinese_lm.arpa')
+            # print('start restore chinese language model-----------------------')
+            # self.chinese_lm_model = kenlm.LanguageModel('models/chinese_lm.arpa')
             # self.chinese_lm_model = self.english_lm_model
 
         _init_models()
@@ -1207,6 +1180,7 @@ class Extractor():
         pure_outputs = detect_table(inputs, pred_func)
         
         outputs = []
+        # pdb.set_trace()
         print(len(pure_outputs) == len(inputs))
         # quit()
 
@@ -1252,9 +1226,7 @@ class Extractor():
                 elif i[j][1]['table_type'] == 'figure':
                     tem.append(["figure", i[j][1]])
             outputs.append([i_idx, tem])
-
-
-
+        # pdb.set_trace()
 
         self.output_detect_table = outputs
         print("table detect num ", len(self.output_detect_table))
@@ -1377,15 +1349,15 @@ class Extractor():
         if language_name == 'english':
             pred_func = self.predictor_recognize_english
             cfg_recognize_sequences = cfg_recognize_english
-            # Mapper  = Mapper_english
-            lm_model = self.english_lm_model
+            Mapper  = Mapper_english
+            # lm_model = self.english_lm_model
         else:
             pred_func = self.predictor_recognize_chinese
             cfg_recognize_sequences = cfg_recognize_chinese
-            # Mapper  = Mapper_chinese
-            lm_model = self.chinese_lm_model
+            Mapper  = Mapper_chinese
+            # lm_model = self.chinese_lm_model
 
-        self._recognize_sequences(pred_func, cfg_recognize_sequences, lm_model)
+        self._recognize_sequences(pred_func, cfg_recognize_sequences, Mapper)
         self.output_type = 'video'
     def from_image(self, img_paths):
         self.output_extract_frames = [[cv2.imread(img_path), idx] for idx, img_path in enumerate(img_paths)]
@@ -1442,6 +1414,31 @@ class Extractor():
             for i in dirs:
                 os.mkdir('{}/{}'.format(self.filename, i))
             return
+            # grouped = [list(g) for f,g in groupby(self.output_detect_text_area, lambda x: x[1]['frame_idx'])]
+            # table_count = 0
+            # print("grouped ", len(grouped))
+            # for group in grouped:
+            #     img = group[0][1]['raw_img']
+            #     for idx, data in enumerate(group):
+            #         x, y, x_end, y_end = data[1]['detect_area']
+            #         cv2.rectangle(img,
+            #                 (x, y),
+            #                 (x_end, y_end),
+            #                 (0, 0, 255),
+            #                 4)
+            #         if len(self.output_detect_table[table_count][1]) > 0:
+            #             for table_coor in self.output_detect_table[table_count][1]:
+            #                 cv2.rectangle(img,
+            #                 (table_coor[1]['detect_table'][0], table_coor[1]['detect_table'][1]),
+            #                 (table_coor[1]['detect_table'][2], table_coor[1]['detect_table'][3]),
+            #                 (255, 0, 145),
+            #                 4)
+            
+            #         # cv2.imwrite('{}/detect_text_area/{}-{}.png'.format(self.filename,data[1]['frame_idx'], idx), data[0])
+            #     # cv2.imwrite('{}/detect_text_area/{}.png'.format(self.filename,data[1]['frame_idx']), img)
+            #     table_count += 1
+
+            
 
         dirs = ['extract_frames', 'detect_text_area', 'segment_lines', 'extract_lines', 'recognize_sequences','gui_frames', 'gui_preds']
         if self.output_type == 'video':
@@ -1466,28 +1463,29 @@ class Extractor():
 
         # save output of detect_text_area
         grouped = [list(g) for f,g in groupby(self.output_detect_text_area, lambda x: x[1]['frame_idx'])]
+        
         table_count = 0
         print("grouped ", len(grouped))
         for group in grouped:
             img = group[0][1]['raw_img']
             for idx, data in enumerate(group):
                 x, y, x_end, y_end = data[1]['detect_area']
-                # cv2.rectangle(img,
-                #         (x, y),
-                #         (x_end, y_end),
-                #         (0, 0, 255),
-                #         4)
-                # if len(self.output_detect_table[table_count][1]) > 0:
-                #     for table_coor in self.output_detect_table[table_count][1]:
-                #         cv2.rectangle(img,
-                #         (table_coor[1]['detect_table'][0], table_coor[1]['detect_table'][1]),
-                #         (table_coor[1]['detect_table'][2], table_coor[1]['detect_table'][3]),
-                #         (255, 0, 145),
-                #         4)
+                cv2.rectangle(img,
+                        (x, y),
+                        (x_end, y_end),
+                        (0, 0, 255),
+                        4)
+        #         if len(self.output_detect_table[table_count][1]) > 0:
+        #             for table_coor in self.output_detect_table[table_count][1]:
+        #                 cv2.rectangle(img,
+        #                 (table_coor[1]['detect_table'][0], table_coor[1]['detect_table'][1]),
+        #                 (table_coor[1]['detect_table'][2], table_coor[1]['detect_table'][3]),
+        #                 (255, 0, 145),
+        #                 4)
         
                 cv2.imwrite('{}/detect_text_area/{}-{}.png'.format(self.filename,data[1]['frame_idx'], idx), data[0])
             cv2.imwrite('{}/detect_text_area/{}.png'.format(self.filename,data[1]['frame_idx']), img)
-            table_count += 1
+        #     table_count += 1
 
         # save output of segment_lines
         
@@ -1538,7 +1536,7 @@ class Extractor():
             detect_area_coor[0], detect_area_coor[1], detect_area_coor[2], detect_area_coor[3], line_area_coor[0], line_area_coor[1], line_area_coor[2], line_area_coor[3]), 'w')
             f.write(data[0])
 
-    def gui(self):
+    def gui(self, language_name='english'):
         def sort_areas(l):
             # TODO
             # 文本区域/图/表， 应返回文本区域的，排序后结果
@@ -1574,8 +1572,16 @@ class Extractor():
             mask_img[:,:,2][mask] = 255
             img = img * 0.7 + mask_img * 0.3
             cv2.rectangle(img, (x,y), (x_end, y_end), (0, 0, 255), 4)
-            self.gui_frames.append(img)
 
+            if len(self.output_detect_table[idx][1]) > 0:
+                for table_coor in self.output_detect_table[idx][1]:
+                    cv2.rectangle(img,
+                        (table_coor[1]['detect_table'][0], table_coor[1]['detect_table'][1]),
+                        (table_coor[1]['detect_table'][2], table_coor[1]['detect_table'][3]),
+                        (255, 0, 145),
+                        4)
+        
+            self.gui_frames.append(img)
         self.gui_preds = []
         # sort by frame_idx, det_area, and line_area
         # pdb.set_trace()
@@ -1603,6 +1609,15 @@ class Extractor():
         cmp_buffer = []
         repeat_value = []
 
+
+        if language_name == 'english':
+            cfg_recognize_sequences = cfg_recognize_english
+            min_loc = 12
+            max_loc = 81
+        else:
+            cfg_recognize_sequences = cfg_recognize_chinese
+            min_loc = 185
+            max_loc = 3683   
 
         output_per_frame = []
         for idx, pred_each_frame in enumerate(predictions_per_frame):
@@ -1646,6 +1661,13 @@ class Extractor():
                     # repeat_frame_list = [1 for e in repeat_buffer if e in single_line[0]]
                     for e in repeat_buffer:
                         if e in single_line[0]:
+                            pre_ = list(set(list(e)) & set(list(single_line[0])))
+                            repeat_tem = 0
+                            for sub_pre in pre_:
+                                if min_loc <= cfg_recognize_sequences.dictionary.index(sub_pre) <= max_loc:
+                                    repeat_tem += 1
+                            if repeat_tem == 0:
+                                continue
                             # print(idx)
                             # print(e)
                             # print(single_line[0])
