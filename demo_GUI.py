@@ -211,7 +211,7 @@ class Extractor_GUI():
             self.cnt_status = STATE_PREDICTING
             self.ext.from_video(filename, language_name)
             self.ext.save()
-            frames = self.ext.gui()
+            frames = self.ext.gui(language_name)
             print("time: ", str(time.time() - start_time4))
             print(frames)
             if frames  == 9:
