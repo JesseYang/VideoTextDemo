@@ -202,6 +202,8 @@ def extract_frames(inputs, label):
         corr_num = math.floor(len(list_1)*0.6)
         frame_idx.extend(list_1[(len(list_1)//2-corr_num//2):(len(list_1)//2+corr_num//2+1)])
         list_1.clear()
+    # print(len(label))
+    # print(frame_idx)
 
     frame_idxss = [list(map(itemgetter(1), g)) for k, g in groupby(enumerate(frame_idx), lambda x: x[0]-x[1])]
     max_blurry_idxs = []
@@ -1646,21 +1648,19 @@ class Extractor():
             # print("sorted_areas num must be 1 ", len(sorted_areas))
             cmp_list = sorted(random.sample(list(np.arange(len(sorted_lines))), math.floor(len(sorted_lines)*0.9)))
             # cmp_list = sorted(list(np.arange(len(sorted_lines))))
-            
+                   
             repeat_buffer = cmp_buffer
-            # print("==============")
-            # print(idx)
-            # print(len(cmp_buffer))
-            # print(len(repeat_frame_list))
-            # print(repeat_frame_list)
-      
+            cmp_buffer = []
+            # print(repeat_buffer)
+      	
             repeat_frame_list.clear()
+
             for det_area_idx, single_line in enumerate(sorted_lines):
                 # print(len(single_line[0]))
                 if idx >= 1:
                     # repeat_frame_list = [1 for e in repeat_buffer if e in single_line[0]]
                     for e in repeat_buffer:
-                        if e in single_line[0]:
+                        if e in single_line[0].strip(' '):
                             pre_ = list(set(list(e)) & set(list(single_line[0])))
                             repeat_tem = 0
                             for sub_pre in pre_:
@@ -1677,20 +1677,21 @@ class Extractor():
                 if det_area_idx in cmp_list:
 
                     if len(single_line[0]) >= 10 and len(single_line[0]) <= 20:
-                        if len(single_line[0].strip(' ')) >5:
+                        if len(single_line[0].strip(' ')) >15:
                             cmp_buffer.append(single_line[0].strip(' '))
                     elif len(single_line[0]) > 21 and len(single_line[0]) <= 50:
                         if len(single_line[0][21:50].strip(' ')) >5:
-                            cmp_buffer.append(single_line[0][21:50].strip(' '))
+                            cmp_buffer.append(single_line[0][15:50].strip(' '))
                     elif len(single_line[0]) > 51 and len(single_line[0]) <= 100:
                         if len(single_line[0][55:90].strip(' ')) > 5 and len(single_line[0][10:50].strip()) > 5:
-                            cmp_buffer.append(single_line[0][55:90].strip(' '))
-                            cmp_buffer.append(single_line[0][10:50].strip(' '))
+                            cmp_buffer.append(single_line[0][20:90].strip(' '))
+                            cmp_buffer.append(single_line[0][4:50].strip(' '))
                     else:
                         if len(single_line[0][55:90].strip(' ')) > 0 and len(single_line[0][10:50].strip())>5:
-                            cmp_buffer.append(single_line[0][20:40].strip(' '))
-                            cmp_buffer.append(single_line[0][60:99].strip(' '))
-                    # print(cmp_buffer)
+                            cmp_buffer.append(single_line[0][20:47].strip(' '))
+                            cmp_buffer.append(single_line[0][40:99].strip(' '))
+                    # cmp_buffer.append(single_line[0].strip(' '))
+
                 
             # for singe_line_idx, single_line in enumerate(pred_each_frame):
                 if single_line[0] == '':
@@ -1707,6 +1708,9 @@ class Extractor():
                         buffer_list.clear()
                     output_lines.append(single_line[0])
             # pdb.set_trace()
+
+
+
             if len(buffer_list) > 0:
                 output_lines.extend(buffer_list)
             output_per_frame.append('\n'.join(output_lines))
