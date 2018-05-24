@@ -421,7 +421,25 @@ def detect_table(inputs, pred_func, enlarge_ratio=1):
 def detect_text_area(inputs, pred_func, enlarge_ratio=1.2):
     def preprocess(inputs):
         # resize images and convert BGR to RGB
-        rgb_imgs = [cv2.cvtColor(i, cv2.COLOR_BGR2RGB) for i in inputs]
+        # rgb_imgs = [cv2.cvtColor(i, cv2.COLOR_BGR2RGB) for i in inputs]
+
+        rgb_imgs = []
+        for pre_img in inputs:
+            image1 = cv2.cvtColor(pre_img, cv2.COLOR_BGR2GRAY)
+            image1 = np.expand_dims(image1, -1)
+           
+            image2 = cv2.adaptiveThreshold(image1,200,cv2.ADAPTIVE_THRESH_MEAN_C, cv2.THRESH_BINARY,5,5)
+           
+            kernel = np.ones((5,5),np.uint8)  
+            erosion = cv2.erode(image2,kernel,iterations = 5)    
+            image2 = np.expand_dims(erosion, -1)
+            
+            image3 = np.zeros(image1.shape)
+            pre_new_img = np.concatenate([image1, image2, image3], axis=-1)
+            pre_new_img = pre_new_img.astype(np.uint8)
+            cv2.imwrite(str(uuid.uuid4())+".jpg", pre_new_img)
+            rgb_imgs.append(pre_new_img)
+        
         resized_imgs = [cv2.resize(i, (img_w, img_h)) for i in rgb_imgs]
         spec_mask = [np.zeros((cfg_detect_text_area.n_boxes, img_w // 32, img_h // 32), dtype=float) == 0 for _ in rgb_imgs]
         return resized_imgs
@@ -558,10 +576,10 @@ def detect_text_area(inputs, pred_func, enlarge_ratio=1.2):
                 ycenter = (ymin + ymax) / 2
                 width = (xmax - xmin) * enlarge_ratio
                 height = (ymax - ymin) * enlarge_ratio
-                xmin = np.max([0, int(xcenter - width / 2)]) + 10
-                ymin = np.max([0, int(ycenter - height / 2)]) + 20
-                xmax = np.min([ori_width - 1, int(xcenter + width / 2)]) - 10
-                ymax = np.min([ori_height - 1, int(ycenter + height / 2)]) - 20
+                xmin = np.max([0, int(xcenter - width / 2)])
+                ymin = np.max([0, int(ycenter - height / 2)])
+                xmax = np.min([ori_width - 1, int(xcenter + width / 2)])
+                ymax = np.min([ori_height - 1, int(ycenter + height / 2)])
 
                 cropped_img = img[ymin:ymax, xmin:xmax]
                 det_area = [xmin, ymin, xmax, ymax]
@@ -1132,11 +1150,13 @@ class Extractor():
         text_area_list = []
         outputs = []
         for i_idx, i in enumerate(pure_outputs):
+            print(len(i))
             max_conf = 0.001
             max_index = 0
             text_area_num = 0
            
             if len(i) <= 0:
+                # pdb.set_trace()
                 text_area_list.append(i_idx)
                 continue
             for j in range(len(i)):
@@ -1156,7 +1176,7 @@ class Extractor():
 
                 information.update(added_information)
                 outputs.append([data, information])
-        print("text_area_list ", text_area_list)   
+        print("no text_area_list ", text_area_list)   
         self.output_detect_text_area = outputs
         if len(text_area_list) >= 1:
             for i_idx, i in enumerate(text_area_list):
@@ -1652,7 +1672,7 @@ class Extractor():
             repeat_buffer = cmp_buffer
             cmp_buffer = []
             # print(repeat_buffer)
-      	
+        
             repeat_frame_list.clear()
 
             for det_area_idx, single_line in enumerate(sorted_lines):
@@ -1709,16 +1729,22 @@ class Extractor():
                     output_lines.append(single_line[0])
             # pdb.set_trace()
 
+            if len(repeat_frame_list) >= 2:
+                repeat_value.append(repeat_frame_list[0])
+                repeat_frame_list.clear()
+                continue
 
 
             if len(buffer_list) > 0:
                 output_lines.extend(buffer_list)
             output_per_frame.append('\n'.join(output_lines))
+            
             # print("repeat frame list:")
             # print(repeat_frame_list)
-            if len(repeat_frame_list) >= 2:
-                repeat_value.append(repeat_frame_list[0])
-                repeat_frame_list.clear()
+            # if len(repeat_frame_list) >= 2:
+            #     repeat_value.append(repeat_frame_list[0])
+            #     repeat_frame_list.clear()
+
             # print(repeat_value)
                 # 先上后下，先左后右（合并）
             #     sorted_lines = sort_lines(pred_each_det_area)
