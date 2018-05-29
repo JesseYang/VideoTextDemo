@@ -91,8 +91,6 @@ def cap_video(video_path):
         print(len(frame_list))
         return frame_list
 
-
-
 def batch_data(data, batch_size):
     len_data = len(data)
     batch_num = len_data // batch_size + 1 if len_data % batch_size else len_data // batch_size
@@ -418,27 +416,32 @@ def detect_table(inputs, pred_func, enlarge_ratio=1):
     postprocessed = [postprocess(preds[i], inputs[i]) for i in range(len(inputs))]
     return postprocessed
 
-def detect_text_area(inputs, pred_func, enlarge_ratio=1.2):
+def detect_text_area(inputs, pred_func, enlarge_ratio=1.15, threshold=1.25):
     def preprocess(inputs):
         # resize images and convert BGR to RGB
-        # rgb_imgs = [cv2.cvtColor(i, cv2.COLOR_BGR2RGB) for i in inputs]
+        rgb_imgs = [cv2.cvtColor(i, cv2.COLOR_BGR2RGB) for i in inputs]
 
-        rgb_imgs = []
-        for pre_img in inputs:
-            image1 = cv2.cvtColor(pre_img, cv2.COLOR_BGR2GRAY)
-            image1 = np.expand_dims(image1, -1)
+        # rgb_imgs = []
+        # for img_idx, pre_img in enumerate(inputs):
+
+        #     image1 = cv2.cvtColor(pre_img, cv2.COLOR_BGR2GRAY)
            
-            image2 = cv2.adaptiveThreshold(image1,200,cv2.ADAPTIVE_THRESH_MEAN_C, cv2.THRESH_BINARY,5,5)
+        #     image1 = cv2.GaussianBlur(image1, (5, 5), 0)
+          
+        #     image1 = np.expand_dims(image1, -1)
+
+        #     image2 = cv2.adaptiveThreshold(image1,255,cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY,7,15)
            
-            kernel = np.ones((5,5),np.uint8)  
-            erosion = cv2.erode(image2,kernel,iterations = 5)    
-            image2 = np.expand_dims(erosion, -1)
+        #     kernel = np.ones((5,5),np.uint8)
+        #     erosion = cv2.erode(image2,kernel,iterations = 5)
+           
+        #     image2 = np.expand_dims(erosion, -1)
             
-            image3 = np.zeros(image1.shape)
-            pre_new_img = np.concatenate([image1, image2, image3], axis=-1)
-            pre_new_img = pre_new_img.astype(np.uint8)
-            cv2.imwrite(str(uuid.uuid4())+".jpg", pre_new_img)
-            rgb_imgs.append(pre_new_img)
+        #     image3 = np.zeros(image1.shape)
+        #     pre_new_img = np.concatenate([image1, image2, image3], axis=-1)
+        #     pre_new_img = pre_new_img.astype(np.uint8)
+           
+        #     rgb_imgs.append(pre_new_img)
         
         resized_imgs = [cv2.resize(i, (img_w, img_h)) for i in rgb_imgs]
         spec_mask = [np.zeros((cfg_detect_text_area.n_boxes, img_w // 32, img_h // 32), dtype=float) == 0 for _ in rgb_imgs]
@@ -574,18 +577,35 @@ def detect_text_area(inputs, pred_func, enlarge_ratio=1.2):
 
                 xcenter = (xmin + xmax) / 2
                 ycenter = (ymin + ymax) / 2
-                width = (xmax - xmin) * enlarge_ratio
-                height = (ymax - ymin) * enlarge_ratio
-                xmin = np.max([0, int(xcenter - width / 2)])
-                ymin = np.max([0, int(ycenter - height / 2)])
-                xmax = np.min([ori_width - 1, int(xcenter + width / 2)])
-                ymax = np.min([ori_height - 1, int(ycenter + height / 2)])
 
-                cropped_img = img[ymin:ymax, xmin:xmax]
-                det_area = [xmin, ymin, xmax, ymax]
-                predicted_coors = [int(coor[0] - xmin), int(coor[1] - ymin), int(coor[2] - xmin), int(coor[3] - ymin)]
+                width = (xmax - xmin) * enlarge_ratio
+                threshold_w = (xmax - xmin) * threshold
+
+                height = (ymax - ymin) * enlarge_ratio
+                threshold_h = (ymax - ymin) * threshold
+
+                xmin = np.max([0, int(xcenter - width / 2)])
+                threshold_xmin = np.max([0, int(xcenter - threshold_w / 2)])
+
+                ymin = np.max([0, int(ycenter - height / 2)])
+                threshold_ymin = np.max([0, int(ycenter - threshold_h / 2)])
+
+
+                xmax = np.min([ori_width - 1, int(xcenter + width / 2)])
+                threshold_xmax = np.min([ori_width - 1, int(xcenter + threshold_w / 2)])
+
+                ymax = np.min([ori_height - 1, int(ycenter + height / 2)])
+                threshold_ymax = np.min([ori_height - 1, int(ycenter + threshold_h / 2)])
+
+
+                # cropped_img = img[ymin:ymax, xmin:xmax]
+                cropped_img = img[threshold_ymin:threshold_ymax, threshold_xmin:threshold_xmax]
+
+                show_area = [xmin, ymin, xmax, ymax]
+                det_area = [int(xmin - threshold_xmin), int(ymin - threshold_ymin), int(xmax - threshold_xmin), int(ymax - threshold_ymin)]
+                predicted_coors = [threshold_xmin, threshold_ymin, threshold_xmax, threshold_ymax]
                 # print(klass)
-                output.append([cropped_img, {'detect_area': det_area, 'type': klass, 'raw_img': img, 'conf': conf, 'predicted_coor':predicted_coors}])
+                output.append([cropped_img, {'detect_area': predicted_coors, 'type': klass, 'raw_img': img, 'conf': conf, 'predicted_coor':det_area, 'show_coor':show_area}])
         return output
 
     def _batch_data(data, batch_size):
@@ -829,13 +849,10 @@ def new_extract_lines(self, inputs, ori_coors):
         # find all contours
         im2, contours, hierarchy = cv2.findContours(mask.astype(np.uint8), cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
 
-
-
         for each_id, each_contour in enumerate(contours):
             x, y, w, h = cv2.boundingRect(each_contour)
-            tem_ = ori_coors[img_idx][2]  - ori_coors[img_idx][0]
-
-            if (x <= 3 and ((x+w) <=  (tem_-tem_//6))) or (((x+w)>= (tem_-3)) and x >= (tem_-tem_//6)) or y <= 3 or (y+h) >= (ori_coors[img_idx][3] - ori_coors[img_idx][1] - 3) or w*h <200:
+            
+            if x < ori_coors[img_idx][0] or (x+w) > ori_coors[img_idx][2] or w*h <210:
                 continue
 
 
@@ -1144,13 +1161,14 @@ class Extractor():
         for i in self.output_extract_frames:
             inputs.append(i[0])
             informations.append(i[1])
+            print(i[1]['frame_idx'])
         pred_func = self.predictor_detect_text_area
         pure_outputs = detect_text_area(inputs, pred_func)
         print("after area detect", len(pure_outputs))
         text_area_list = []
         outputs = []
         for i_idx, i in enumerate(pure_outputs):
-            print(len(i))
+           
             max_conf = 0.001
             max_index = 0
             text_area_num = 0
@@ -1302,7 +1320,7 @@ class Extractor():
         for i,j in zip(self.output_detect_text_area, self.output_segment_lines):
             inputs.append([i[0], j[0]])
             informations.append(j[1])
-            ori_coors.append(j[1]['detect_area'])
+            ori_coors.append(j[1]['predicted_coor'])
         pure_outputs, right_idx_lists = new_extract_lines(self,inputs, ori_coors)
         print("after new extractt_lines", len(pure_outputs), "after new extract_lines right_list num", len(right_idx_lists))
         right_list = list(set(right_idx_lists))
@@ -1581,6 +1599,7 @@ class Extractor():
             origin_h, origin_w = img.shape[:2]
             mask = np.copy(self.output_segment_lines[idx][0])
             x, y, x_end, y_end = self.output_segment_lines[idx][1]['detect_area']
+            x1, y1, x_end1, y_end1 = self.output_segment_lines[idx][1]['show_coor']
             filled = mask.astype(np.uint8).copy()
             for line in self.output_recognize_sequences:
                 # same frame and same area
@@ -1594,6 +1613,7 @@ class Extractor():
             mask_img[:,:,2][mask] = 255
             img = img * 0.7 + mask_img * 0.3
             cv2.rectangle(img, (x,y), (x_end, y_end), (0, 0, 255), 4)
+            cv2.rectangle(img, (x1,y1), (x_end1, y_end1), (255, 255, 0), 2)
 
             if len(self.output_detect_table[idx][1]) > 0:
                 for table_coor in self.output_detect_table[idx][1]:
@@ -1655,7 +1675,7 @@ class Extractor():
             
             buffer_list = []
             output_lines = []
-            text_area_coor = pred_each_frame[0][1]['detect_area']
+            text_area_coor = pred_each_frame[0][1]['show_coor']
             x = text_area_coor[0]
             y = text_area_coor[1]
             w = text_area_coor[2] - text_area_coor[0]
@@ -1771,8 +1791,8 @@ class Extractor():
         if len(self.output_error_list) == 0:
             save_id = 0
             for idx, pred in enumerate(self.gui_preds):
-                if idx in repeat_value:
-                    continue
+                # if idx in repeat_value:
+                #     continue
                 gui_preds_tem.append(pred)
                 open('{}/gui_preds/{}.txt'.format(self.filename, save_id), 'w').write(pred)
                 save_id += 1
@@ -1782,8 +1802,8 @@ class Extractor():
             count_index = 0
             save_id = 0
             for idx in range(len(self.output_detect_text_area)):
-                if idx in repeat_value:
-                    continue
+                # if idx in repeat_value:
+                #     continue
                 if idx in self.output_error_list:
                     open('{}/gui_preds/{}.txt'.format(self.filename, save_id), 'w').write("                 ")
                     save_id += 1
