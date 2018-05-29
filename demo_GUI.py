@@ -30,7 +30,7 @@ class Extractor_GUI():
         self.window = tk.Tk()
         self.window.wm_title('VideoText')
         self.window.config(background = '#FFFFFF')
-
+        self.language_name = 'english'
         # ====================================================================
         # canvas
         # ====================================================================
@@ -84,6 +84,7 @@ class Extractor_GUI():
         self.cnt_status = STATE_UNINITIALIZED
         self.__update_status_bar()
 
+        self.window.resizable(False, False)
 
     def __init_model(self):
         def init():
@@ -122,6 +123,7 @@ class Extractor_GUI():
                 print("no language selected")
                 return
             print("selected language " + selected_language)
+            self.language_name = selected_language
             # return None
             self.do(filename, selected_language)
             # extension = filename.split('.')[-1]
@@ -148,11 +150,15 @@ class Extractor_GUI():
     
     def update_txt_size(self):
         w = 0
+        # pdb.set_trace()
         for i in self.txt_pred.get(1.0, tk.END).split('\n'):
             if len(i) > w:
                 w = len(i) + 1
-        self.txt_pred.configure(width = w)
-
+       
+        if self.language_name == 'chinese':
+            self.txt_pred.configure(width = int(w*1.7))
+        else:
+            self.txt_pred.configure(width = w)
     def __update_btn_new(self):
         if self.cnt_status == STATE_READY or self.cnt_status == STATE_FILE_ERROR:
             self.btn_new['state'] = 'normal'
