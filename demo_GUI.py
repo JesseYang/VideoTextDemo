@@ -71,16 +71,18 @@ class Extractor_GUI():
         r1=tk.Radiobutton(self.fm_status,text='English',variable=self.var,value='english',command=None)   
         r1.grid(row = 0, column=3, padx=10, pady=2)
 
-     
         r2=tk.Radiobutton(self.fm_status,text='Chinese',variable=self.var,value='chinese',command=None)  
-        r2.grid(row = 0, column=4, padx=10, pady=2)   
+        r2.grid(row = 0, column=4, padx=10, pady=2)
 
-        self.var.set("english")      
+        r3=tk.Radiobutton(self.fm_status,text='Korean',variable=self.var,value='korean',command=None)  
+        r3.grid(row = 0, column=5, padx=10, pady=2)
+
+        self.var.set("english")
         
         self.btn_load = tk.Button(self.fm_status, text = 'Load', command = self.__action_load)
-        self.btn_load.grid(row = 0, column=5, padx=10, pady=2)
+        self.btn_load.grid(row = 0, column=6, padx=10, pady=2)
         self.lb_status = tk.Label(self.fm_status, background = '#FFFFFF')
-        self.lb_status.grid(row = 0, column=6, padx=10, pady=2)
+        self.lb_status.grid(row = 0, column=7, padx=10, pady=2)
         self.cnt_status = STATE_UNINITIALIZED
         self.__update_status_bar()
 
