@@ -24,6 +24,7 @@ from segment_lines.train import Model as Model_segment_lines
 # from recognize_sequences.train import Model as Model_recognize_sequences
 from recognize_english.train import Model as Model_recognize_english
 from recognize_chinese.train import Model as Model_recognize_chinese
+from recognize_korean.train import Model as Model_recognize_korean
 # Mapper  Model_recognize_sequences cfg_recognize_sequences
 # import configs
 from classify_frames.cfgs.config import cfg as cfg_classify_frames
@@ -33,9 +34,11 @@ from segment_lines.cfgs.config import cfg as cfg_segment_lines
 # from recognize_sequences.cfgs.config import cfg as cfg_eng_recognize_sequences
 from recognize_english.cfgs.config import cfg as cfg_recognize_english
 from recognize_chinese.cfgs.config import cfg as cfg_recognize_chinese
+from recognize_korean.cfgs.config import cfg as cfg_recognize_korean
 # from recognize_sequences.mapper import Mapper
 from recognize_english.mapper import Mapper as Mapper_english
 from recognize_chinese.mapper import Mapper as Mapper_chinese
+from recognize_korean.mapper import Mapper as Mapper_korean
 
 from cfgs.config import cfg
 
@@ -1042,6 +1045,7 @@ class Extractor():
             weights_segment_lines = SaverRestore('models/segment_lines')
             weights_recognize_english = SaverRestore('models/recognize_english')
             weights_recognize_chinese = SaverRestore('models/recognize_chinese')
+            weights_recognize_korean = SaverRestore('models/recognize_korean')
             
             # Build graphs
             model_classify_frames = Model_classify_frames()
@@ -1050,6 +1054,7 @@ class Extractor():
             model_segment_lines = Model_segment_lines()
             model_recognize_english = Model_recognize_english()
             model_recognize_chinese = Model_recognize_chinese()
+            model_recognize_korean = Model_recognize_korean()
 
             # Build predict configs
             
@@ -1060,6 +1065,7 @@ class Extractor():
             # config_recognize_sequences = PredictConfig(session_init = weights_recognize_sequences, model = model_recognize_sequences, input_names = ['feat', 'seqlen'], output_names = ['prediction'])
             config_recognize_english = PredictConfig(session_init = weights_recognize_english, model = model_recognize_english, input_names = ['feat', 'seqlen'], output_names = ['prediction_prob', 'prediction'])
             config_recognize_chinese = PredictConfig(session_init = weights_recognize_chinese, model = model_recognize_chinese, input_names = ['feat', 'seqlen'], output_names = ['prediction_prob', 'prediction'])
+            config_recognize_korean = PredictConfig(session_init = weights_recognize_korean, model = model_recognize_korean, input_names = ['feat', 'seqlen'], output_names = ['prediction_prob', 'prediction'])
             
 
             # Build predictors
@@ -1081,6 +1087,10 @@ class Extractor():
 
             print('start restore recognize_chinese-----------------------')
             self.predictor_recognize_chinese = OfflinePredictor(config_recognize_chinese)
+
+            print('start restore recognize_korean-----------------------')
+            self.predictor_recognize_korean = OfflinePredictor(config_recognize_korean)
+            
             
             # print('start restore english language model-----------------------')
             # self.english_lm_model = kenlm.LanguageModel('models/english_lm.arpa')
@@ -1391,11 +1401,15 @@ class Extractor():
             cfg_recognize_sequences = cfg_recognize_english
             Mapper  = Mapper_english
             # lm_model = self.english_lm_model
-        else:
+        elif language_name == 'chinese':
             pred_func = self.predictor_recognize_chinese
             cfg_recognize_sequences = cfg_recognize_chinese
             Mapper  = Mapper_chinese
             # lm_model = self.chinese_lm_model
+        else:
+            pred_func = self.predictor_recognize_korean
+            cfg_recognize_sequences = cfg_recognize_korean
+            Mapper  = Mapper_korean
 
         self._recognize_sequences(pred_func, cfg_recognize_sequences, Mapper)
         self.output_type = 'video'
@@ -1607,6 +1621,7 @@ class Extractor():
                     txt = ''.join(line[0].split())
                     if len(txt) == 0:
                         cv2.fillPoly(filled, pts =[line[4]], color = 0)
+            
             mask = np.pad(filled, ((y, origin_h - y_end), (x, origin_w - x_end)), 'constant', constant_values = 0)
             mask = mask == 1
             mask_img = np.zeros(img.shape)
@@ -1651,15 +1666,20 @@ class Extractor():
         cmp_buffer = []
         repeat_value = []
 
-
+        mid = []
         if language_name == 'english':
             cfg_recognize_sequences = cfg_recognize_english
             min_loc = 12
             max_loc = 81
-        else:
+        elif language_name == 'chinese':
             cfg_recognize_sequences = cfg_recognize_chinese
             min_loc = 185
-            max_loc = 3683   
+            max_loc = 3683
+        else:
+            cfg_recognize_sequences = cfg_recognize_korean
+            min_loc = 76
+            max_loc = 1621
+            mid = [266, 970, 1262, 855, 209, 1245, 668]
 
         output_per_frame = []
         for idx, pred_each_frame in enumerate(predictions_per_frame):
@@ -1704,7 +1724,7 @@ class Extractor():
                             pre_ = list(set(list(e)) & set(list(single_line[0])))
                             repeat_tem = 0
                             for sub_pre in pre_:
-                                if min_loc <= cfg_recognize_sequences.dictionary.index(sub_pre) <= max_loc:
+                                if min_loc <= cfg_recognize_sequences.dictionary.index(sub_pre) <= max_loc and cfg_recognize_sequences.dictionary.index(sub_pre) not in mid:
                                     repeat_tem += 1
                             if repeat_tem == 0:
                                 continue
