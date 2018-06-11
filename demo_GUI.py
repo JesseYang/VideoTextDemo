@@ -77,12 +77,15 @@ class Extractor_GUI():
         r3=tk.Radiobutton(self.fm_status,text='Korean',variable=self.var,value='korean',command=None)  
         r3.grid(row = 0, column=5, padx=10, pady=2)
 
+        r4=tk.Radiobutton(self.fm_status,text='Japanese',variable=self.var,value='japanese',command=None)  
+        r4.grid(row = 0, column=6, padx=10, pady=2)
+
         self.var.set("english")
         
         self.btn_load = tk.Button(self.fm_status, text = 'Load', command = self.__action_load)
-        self.btn_load.grid(row = 0, column=6, padx=10, pady=2)
+        self.btn_load.grid(row = 0, column=7, padx=10, pady=2)
         self.lb_status = tk.Label(self.fm_status, background = '#FFFFFF')
-        self.lb_status.grid(row = 0, column=7, padx=10, pady=2)
+        self.lb_status.grid(row = 0, column=8, padx=10, pady=2)
         self.cnt_status = STATE_UNINITIALIZED
         self.__update_status_bar()
 
@@ -157,7 +160,7 @@ class Extractor_GUI():
             if len(i) > w:
                 w = len(i) + 1
        
-        if self.language_name == 'chinese':
+        if self.language_name != 'english':
             self.txt_pred.configure(width = int(w*1.7))
         else:
             self.txt_pred.configure(width = w)
