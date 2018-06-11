@@ -25,6 +25,7 @@ from segment_lines.train import Model as Model_segment_lines
 from recognize_english.train import Model as Model_recognize_english
 from recognize_chinese.train import Model as Model_recognize_chinese
 from recognize_korean.train import Model as Model_recognize_korean
+from recognize_japanese.train import Model as Model_recognize_japanese
 # Mapper  Model_recognize_sequences cfg_recognize_sequences
 # import configs
 from classify_frames.cfgs.config import cfg as cfg_classify_frames
@@ -35,10 +36,12 @@ from segment_lines.cfgs.config import cfg as cfg_segment_lines
 from recognize_english.cfgs.config import cfg as cfg_recognize_english
 from recognize_chinese.cfgs.config import cfg as cfg_recognize_chinese
 from recognize_korean.cfgs.config import cfg as cfg_recognize_korean
+from recognize_japanese.cfgs.config import cfg as cfg_recognize_japanese
 # from recognize_sequences.mapper import Mapper
 from recognize_english.mapper import Mapper as Mapper_english
 from recognize_chinese.mapper import Mapper as Mapper_chinese
 from recognize_korean.mapper import Mapper as Mapper_korean
+from recognize_japanese.mapper import Mapper as Mapper_japanese
 
 from cfgs.config import cfg
 
@@ -854,7 +857,13 @@ def new_extract_lines(self, inputs, ori_coors):
 
         for each_id, each_contour in enumerate(contours):
             x, y, w, h = cv2.boundingRect(each_contour)
-            
+            tem_w = self.output_detect_text_area[img_idx][1]['detect_area'][2] - self.output_detect_text_area[img_idx][1]['detect_area'][0]
+
+            if (self.output_detect_text_area[img_idx][1]['detect_area'][0] - self.output_detect_text_area[img_idx][1]['show_coor'][0] <= 1) or \
+            (self.output_detect_text_area[img_idx][1]['detect_area'][2] - self.output_detect_text_area[img_idx][1]['show_coor'][2] <= 1):
+                if x <= 3 or (x+w) >= (tem_w-3):
+                    continue
+
             if x < ori_coors[img_idx][0] or (x+w) > ori_coors[img_idx][2] or w*h <210:
                 continue
 
@@ -866,9 +875,11 @@ def new_extract_lines(self, inputs, ori_coors):
                     # for table_sub_coor in table_coor:
                     # print(table_coor[1]['detect_table'])
                     coor = self.output_detect_text_area[img_idx][1]['detect_area']
-                    if (x+coor[0])  >= (table_coor[1]['detect_table'][0]-5) and (x+w+coor[0]) <= (table_coor[1]['detect_table'][2]+5) and \
-                    (y+coor[1]) >= (table_coor[1]['detect_table'][1]-5) and (y+h+coor[1]) <= (table_coor[1]['detect_table'][3]+5):
-                       
+                    # if (x+coor[0])  >= (table_coor[1]['detect_table'][0]-5) and (x+w+coor[0]) <= (table_coor[1]['detect_table'][2]+5) and \
+                    # (y+coor[1]) >= (table_coor[1]['detect_table'][1]-5) and (y+h+coor[1]) <= (table_coor[1]['detect_table'][3]+5):
+                    if (x+coor[0])  >= (int(table_coor[1][0])-5) and (x+w+coor[0]) <= (int(table_coor[1][2])+5) and \
+                    (y+coor[1]) >= (int(table_coor[1][1])-5) and (y+h+coor[1]) <= (int(table_coor[1][3])+5):
+                          
                         flage_count += 1
                         # continue
             if flage_count > 0:
@@ -1046,6 +1057,7 @@ class Extractor():
             weights_recognize_english = SaverRestore('models/recognize_english')
             weights_recognize_chinese = SaverRestore('models/recognize_chinese')
             weights_recognize_korean = SaverRestore('models/recognize_korean')
+            weights_recognize_japanese = SaverRestore('models/recognize_japanese')
             
             # Build graphs
             model_classify_frames = Model_classify_frames()
@@ -1055,6 +1067,7 @@ class Extractor():
             model_recognize_english = Model_recognize_english()
             model_recognize_chinese = Model_recognize_chinese()
             model_recognize_korean = Model_recognize_korean()
+            model_recognize_japanese = Model_recognize_japanese()
 
             # Build predict configs
             
@@ -1066,6 +1079,7 @@ class Extractor():
             config_recognize_english = PredictConfig(session_init = weights_recognize_english, model = model_recognize_english, input_names = ['feat', 'seqlen'], output_names = ['prediction_prob', 'prediction'])
             config_recognize_chinese = PredictConfig(session_init = weights_recognize_chinese, model = model_recognize_chinese, input_names = ['feat', 'seqlen'], output_names = ['prediction_prob', 'prediction'])
             config_recognize_korean = PredictConfig(session_init = weights_recognize_korean, model = model_recognize_korean, input_names = ['feat', 'seqlen'], output_names = ['prediction_prob', 'prediction'])
+            config_recognize_japanese = PredictConfig(session_init = weights_recognize_japanese, model = model_recognize_japanese, input_names = ['feat', 'seqlen'], output_names = ['prediction_prob', 'prediction'])
             
 
             # Build predictors
@@ -1090,6 +1104,9 @@ class Extractor():
 
             print('start restore recognize_korean-----------------------')
             self.predictor_recognize_korean = OfflinePredictor(config_recognize_korean)
+
+            print('start restore recognize_japanese-----------------------')
+            self.predictor_recognize_japanese = OfflinePredictor(config_recognize_japanese)
             
             
             # print('start restore english language model-----------------------')
@@ -1175,44 +1192,45 @@ class Extractor():
         pred_func = self.predictor_detect_text_area
         pure_outputs = detect_text_area(inputs, pred_func)
         print("after area detect", len(pure_outputs))
+        # pdb.set_trace()
         text_area_list = []
         outputs = []
         for i_idx, i in enumerate(pure_outputs):
-           
-            max_conf = 0.001
-            max_index = 0
-            text_area_num = 0
            
             if len(i) <= 0:
                 # pdb.set_trace()
                 text_area_list.append(i_idx)
                 continue
+            max_area = []
+            max_area_indx = []
             for j in range(len(i)):
               
-                if i[j][1]['type'] == 'text_area' and i[j][1]['conf'] > max_conf:
-                    text_area_num += 1
-                    max_conf = i[j][1]['conf']
-                    max_index = j
-                
+                if i[j][1]['type'] == 'text_area':
+                    max_area.append(i[j][1]['conf'])
+                    max_area_indx.append(j)
+            if len(max_area) <=0:
+                text_area_list.append(i_idx)
+                continue
 
-            # pdb.set_trace()
-            if text_area_num > 0:
-                data = i[max_index][0]
-                added_information = i[max_index][1]
+            max_index = max_area_indx[np.argmax(max_area)]
+            data = i[max_index][0]
+            added_information = i[max_index][1]
 
-                information = deepcopy(informations[i_idx])
+            information = deepcopy(informations[i_idx])
 
-                information.update(added_information)
-                outputs.append([data, information])
+            information.update(added_information)
+            outputs.append([data, information])
         print("no text_area_list ", text_area_list)   
         self.output_detect_text_area = outputs
+
+        self.output_extract_frames_save = self.output_extract_frames.copy()
         if len(text_area_list) >= 1:
             for i_idx, i in enumerate(text_area_list):
                 if i_idx >= 1:
                     self.output_extract_frames.pop(i-i_idx)
                 else:
                     self.output_extract_frames.pop(i)
-        print("text area detect num ", len(self.output_detect_text_area))
+        print("text area detect num ", len(self.output_detect_text_area), len(self.output_extract_frames))
         # quit()
 
     def _detect_table(self):
@@ -1234,52 +1252,53 @@ class Extractor():
         print(len(pure_outputs) == len(inputs))
         # quit()
 
-        for i_idx, i in enumerate(pure_outputs):
-            table_max_conf = 0.001
-            table_max_index = 0
-            table_num = 0
+        # for i_idx, i in enumerate(pure_outputs):
+            # table_max_conf = 0.001
+            # table_max_index = 0
+            # table_num = 0
 
-            figure_max_conf = 0.001
-            figure_max_index = 0
-            figure_num = 0
+            # figure_max_conf = 0.001
+            # figure_max_index = 0
+            # figure_num = 0
             # print("----", len(i))
-            tem = []
-            if len(i) <= 0:
-                outputs.append([i_idx, tem])
-                continue
-            print(i_idx, len(i))
-            for j in range(len(i)):
-                if i[j][1]['table_type'] == 'table' and i[j][1]['table_conf'] > table_max_conf:
-                    table_num += 1
-                    table_max_conf = i[j][1]['table_conf']
-                    table_max_index = j
-                elif i[j][1]['table_type'] == 'figure' and i[j][1]['table_conf'] > figure_max_conf:
-                    figure_num += 1
-                    figure_max_conf = i[j][1]['table_conf']
-                    figure_max_index = j
+            # tem = []
+            # if len(i) <= 0:
+            #     outputs.append([i_idx, tem])
+            #     continue
+            # print(i_idx, len(i))
+            # for j in range(len(i)):
+            #     if i[j][1]['table_type'] == 'table' and i[j][1]['table_conf'] > table_max_conf:
+            #         table_num += 1
+            #         table_max_conf = i[j][1]['table_conf']
+            #         table_max_index = j
+            #     elif i[j][1]['table_type'] == 'figure' and i[j][1]['table_conf'] > figure_max_conf:
+            #         figure_num += 1
+            #         figure_max_conf = i[j][1]['table_conf']
+            #         figure_max_index = j
             
-            if table_num > 0:
-                tem.append(["table", i[table_max_index][1]])
-            if figure_num > 0:
-                tem.append(["figure", i[figure_max_index][1]])
-            outputs.append([i_idx, tem])
-           
+            # if table_num > 0:
+            #     tem.append(["table", i[table_max_index][1]])
+            # if figure_num > 0:
+            #     tem.append(["figure", i[figure_max_index][1]])
+            # outputs.append([i_idx, tem])
+        
         for i_idx, i in enumerate(pure_outputs):
             tem = []
             if len(i) <= 0:
                 outputs.append([i_idx, tem])
                 continue
-            print(i_idx, len(i))
+            # print(i_idx, len(i))
             for j in range(len(i)):
-                if i[j][1]['table_type'] == 'table':
-                    tem.append(["table", i[j][1]])
-                elif i[j][1]['table_type'] == 'figure':
-                    tem.append(["figure", i[j][1]])
+                # if i[j][1]['table_type'] == 'table':
+                #     tem.append(["table", i[j][1]])
+                # elif i[j][1]['table_type'] == 'figure':
+                #     tem.append(["figure", i[j][1]])
+                tem.append([i[j][1]['table_type'], i[j][1]['detect_table']])
             outputs.append([i_idx, tem])
         # pdb.set_trace()
 
         self.output_detect_table = outputs
-        print("table detect num ", len(self.output_detect_table))
+        print("table detect num ", len(self.output_detect_table), len(self.output_extract_frames))
         
     def _segment_lines(self):
         print('segmenting lines ...', len(self.output_detect_text_area))
@@ -1406,10 +1425,14 @@ class Extractor():
             cfg_recognize_sequences = cfg_recognize_chinese
             Mapper  = Mapper_chinese
             # lm_model = self.chinese_lm_model
-        else:
+        elif language_name == 'korean':
             pred_func = self.predictor_recognize_korean
             cfg_recognize_sequences = cfg_recognize_korean
             Mapper  = Mapper_korean
+        else:
+            pred_func = self.predictor_recognize_japanese
+            cfg_recognize_sequences = cfg_recognize_japanese
+            Mapper  = Mapper_japanese
 
         self._recognize_sequences(pred_func, cfg_recognize_sequences, Mapper)
         self.output_type = 'video'
@@ -1512,7 +1535,7 @@ class Extractor():
                 f.write(str(i))
 
         # save output of extract_frames
-        for data in self.output_extract_frames:
+        for data in self.output_extract_frames_save:
             cv2.imwrite('{}/extract_frames/{}.png'.format(self.filename, data[1]['frame_idx']), data[0])
 
         # save output of detect_text_area
@@ -1521,7 +1544,7 @@ class Extractor():
         table_count = 0
         print("grouped ", len(grouped))
         for group in grouped:
-            img = group[0][1]['raw_img']
+            img = group[0][1]['raw_img'].copy()
             for idx, data in enumerate(group):
                 x, y, x_end, y_end = data[1]['detect_area']
                 cv2.rectangle(img,
@@ -1544,7 +1567,7 @@ class Extractor():
         # save output of segment_lines
         
         for i,j in zip(self.output_detect_text_area, self.output_segment_lines):
-            img = i[0]
+            img = i[0].copy()
             print(img.shape)
             img = j[1]['img']
             mask = j[0]
@@ -1609,18 +1632,21 @@ class Extractor():
             return 0
         # pdb.set_trace()
         for idx in range(len(self.output_segment_lines)):
-            img = np.copy(self.output_extract_frames[idx][0])
+            # img = np.copy(self.output_extract_frames[idx][0])
+            ids_ = self.output_segment_lines[idx][1]['frame_idx']
+            img = np.copy(self.frames[ids_])
+
             origin_h, origin_w = img.shape[:2]
             mask = np.copy(self.output_segment_lines[idx][0])
             x, y, x_end, y_end = self.output_segment_lines[idx][1]['detect_area']
             x1, y1, x_end1, y_end1 = self.output_segment_lines[idx][1]['show_coor']
             filled = mask.astype(np.uint8).copy()
-            for line in self.output_recognize_sequences:
+            # for line in self.output_recognize_sequences:
                 # same frame and same area
-                if line[1] == self.output_extract_frames[idx][1] and line[2] == [x, y, x_end, y_end]:
-                    txt = ''.join(line[0].split())
-                    if len(txt) == 0:
-                        cv2.fillPoly(filled, pts =[line[4]], color = 0)
+                # if line[1] == self.output_extract_frames[idx][1] and line[2] == [x, y, x_end, y_end]:
+                #     txt = ''.join(line[0].split())
+                #     if len(txt) == 0:
+                #         cv2.fillPoly(filled, pts =[line[4]], color = 0)
             
             mask = np.pad(filled, ((y, origin_h - y_end), (x, origin_w - x_end)), 'constant', constant_values = 0)
             mask = mask == 1
@@ -1633,11 +1659,13 @@ class Extractor():
             if len(self.output_detect_table[idx][1]) > 0:
                 for table_coor in self.output_detect_table[idx][1]:
                     cv2.rectangle(img,
-                        (table_coor[1]['detect_table'][0], table_coor[1]['detect_table'][1]),
-                        (table_coor[1]['detect_table'][2], table_coor[1]['detect_table'][3]),
-                        (255, 0, 145),
-                        4)
-        
+                        # (table_coor[1]['detect_table'][0], table_coor[1]['detect_table'][1]),
+                        # (table_coor[1]['detect_table'][2], table_coor[1]['detect_table'][3]),
+                        # (255, 0, 145),
+                        # 4)
+                        (table_coor[1][0], table_coor[1][1]),
+                        (table_coor[1][2], table_coor[1][3]),
+                        (255, 0, 145),4)
             self.gui_frames.append(img)
         self.gui_preds = []
         # sort by frame_idx, det_area, and line_area
@@ -1675,11 +1703,16 @@ class Extractor():
             cfg_recognize_sequences = cfg_recognize_chinese
             min_loc = 185
             max_loc = 3683
-        else:
+        elif language_name == 'korean':
             cfg_recognize_sequences = cfg_recognize_korean
             min_loc = 76
             max_loc = 1621
             mid = [266, 970, 1262, 855, 209, 1245, 668]
+        else:
+            cfg_recognize_sequences = cfg_recognize_japanese
+            min_loc = 69
+            max_loc = 6025
+            # mid = [266, 970, 1262, 855, 209, 1245, 668]
 
         output_per_frame = []
         for idx, pred_each_frame in enumerate(predictions_per_frame):
@@ -1721,6 +1754,10 @@ class Extractor():
                     # repeat_frame_list = [1 for e in repeat_buffer if e in single_line[0]]
                     for e in repeat_buffer:
                         if e in single_line[0].strip(' '):
+                            # print(idx)
+                            # print(e)
+                            # print(single_line[0])
+                            repeat_frame_list.append(idx)
                             pre_ = list(set(list(e)) & set(list(single_line[0])))
                             repeat_tem = 0
                             for sub_pre in pre_:
@@ -1731,7 +1768,7 @@ class Extractor():
                             # print(idx)
                             # print(e)
                             # print(single_line[0])
-                            repeat_frame_list.append(idx)
+                            # repeat_frame_list.append(idx)
                             # print(repeat_frame_list)
                            
                 if det_area_idx in cmp_list:
