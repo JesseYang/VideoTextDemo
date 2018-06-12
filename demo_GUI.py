@@ -82,7 +82,7 @@ class Extractor_GUI():
 
         self.var.set("english")
         
-        self.btn_load = tk.Button(self.fm_status, text = 'Load', command = self.__action_load)
+        self.btn_load = tk.Button(self.fm_status, text = 'Load', command = self.__action_load, state = 'disabled')
         self.btn_load.grid(row = 0, column=7, padx=10, pady=2)
         self.lb_status = tk.Label(self.fm_status, background = '#FFFFFF')
         self.lb_status.grid(row = 0, column=8, padx=10, pady=2)
@@ -151,24 +151,25 @@ class Extractor_GUI():
         pred = self.collections_text[self.cnt_current_frame]
         self.txt_pred.delete(1.0, tk.END)
         self.txt_pred.insert(tk.END, pred)
-        self.update_txt_size()
+        # self.update_txt_size()
     
     def update_txt_size(self):
         w = 0
         # pdb.set_trace()
-        for i in self.txt_pred.get(1.0, tk.END).split('\n'):
+        # for i in self.txt_pred.get(1.0, tk.END).split('\n'):
+        for i in self.collections_text[self.cnt_current_frame].split('\n'):
+            
             if len(i) > w:
                 w = len(i) + 1
-       
-        if self.language_name != 'english':
-            self.txt_pred.configure(width = int(w*1.7))
-        else:
-            self.txt_pred.configure(width = w)
+        self.txt_pred.configure(width = int(w*1.3))
+
     def __update_btn_new(self):
         if self.cnt_status == STATE_READY or self.cnt_status == STATE_FILE_ERROR:
             self.btn_new['state'] = 'normal'
+            self.btn_load['state'] = 'normal'
         else:
             self.btn_new['state'] = 'disabled'
+            self.btn_load['state'] = 'disabled'
 
     def __update_control_bar(self):
         if self.cnt_current_frame > 0:
@@ -186,13 +187,15 @@ class Extractor_GUI():
         self.lb_status['text'] = self.cnt_status
         if self.cnt_status == STATE_READY or self.cnt_status == STATE_FILE_ERROR:
             self.btn_new['state'] = 'normal'
+            self.btn_load['state'] = 'normal'
         else:
             self.btn_new['state'] = 'disabled'
+            self.btn_load['state'] = 'disabled'
         self.lb_status.after(500, self.__update_status_bar)
 
     
     def load(self, res_dir):
-        # print(res_dir)
+        print(res_dir)
         if len(res_dir) == 0:
             return 
         frame_dir = os.path.join(res_dir, 'gui_frames')
@@ -201,14 +204,15 @@ class Extractor_GUI():
             return
         num = len(os.listdir(frame_dir))
         nums = len(os.listdir(text_dir))
-        if num != nums and num <= 0:
+        if num != nums or num <= 0:
             return
         frame_path_collections = [os.path.join(frame_dir, '{}.png'.format(i)) for i in range(num)]
-        self.collections_frame = [cv2.imread(i) for i in frame_path_collections]
+        
         text_path_collections = [os.path.join(text_dir, '{}.txt'.format(i)) for i in range(num)]
-        for prd_txt in text_path_collections:
-            if not os.path.exists(prd_txt):
+        for i in range(num):
+            if not os.path.exists(frame_path_collections[i]) or not os.path.exists(text_path_collections[i]):
                 return
+        self.collections_frame = [cv2.imread(i) for i in frame_path_collections]
         self.collections_text = [''.join(open(i,'r').readlines()) for i in text_path_collections]
         self.cnt_current_frame = 0
         self.cnt_total_frame = len(self.collections_frame)
