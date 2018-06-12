@@ -1,7 +1,7 @@
 import tkinter as tk
 from tkinter.filedialog import askopenfilename, askdirectory
 from tkinter.messagebox import askquestion
-from demo_neo import Extractor
+from demo_terminal import Extractor
 from PIL import Image
 from PIL import ImageTk
 import os
