@@ -19,7 +19,7 @@ from PIL import Image
 from tensorpack import *
 from classify_frames.train import Model as Model_classify_frames
 from detect_table.train import Model as Model_detect_table
-from detect.train import Model as Model_detect_text_area
+from detect.train import VGGFSSD as Model_detect_text_area
 from segment_lines.train import Model as Model_segment_lines
 # from recognize_sequences.train import Model as Model_recognize_sequences
 from recognize_english.train import Model as Model_recognize_english
@@ -44,7 +44,7 @@ from recognize_korean.mapper import Mapper as Mapper_korean
 from recognize_japanese.mapper import Mapper as Mapper_japanese
 
 from cfgs.config import cfg
-
+from detect.utils_bak import postprocess as detect_postprocess
 ## lm
 # from lm_prefix_beam_search import prefix_beam_search
 # import kenlm
@@ -425,236 +425,91 @@ def detect_table(inputs, pred_func, enlarge_ratio=1):
 def detect_text_area(inputs, pred_func, enlarge_ratio=1.15, threshold=1.25):
     def preprocess(inputs):
         # resize images and convert BGR to RGB
-        rgb_imgs = [cv2.cvtColor(i, cv2.COLOR_BGR2RGB) for i in inputs]
-
-        # rgb_imgs = []
-        # for img_idx, pre_img in enumerate(inputs):
-
-        #     image1 = cv2.cvtColor(pre_img, cv2.COLOR_BGR2GRAY)
-           
-        #     image1 = cv2.GaussianBlur(image1, (5, 5), 0)
-          
-        #     image1 = np.expand_dims(image1, -1)
-
-        #     image2 = cv2.adaptiveThreshold(image1,255,cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY,7,15)
-           
-        #     kernel = np.ones((5,5),np.uint8)
-        #     erosion = cv2.erode(image2,kernel,iterations = 5)
-           
-        #     image2 = np.expand_dims(erosion, -1)
-            
-        #     image3 = np.zeros(image1.shape)
-        #     pre_new_img = np.concatenate([image1, image2, image3], axis=-1)
-        #     pre_new_img = pre_new_img.astype(np.uint8)
-           
-        #     rgb_imgs.append(pre_new_img)
+        resized_imgs = []
+        for i in inputs:
+            img_color = cv2.cvtColor(i, cv2.COLOR_BGR2RGB)
+            resized_img = cv2.resize(img_color, (img_w, img_h))
+            # image_exp = np.expand_dims(resized_img, axis=0)
+            resized_imgs.append(resized_img)
         
-        resized_imgs = [cv2.resize(i, (img_w, img_h)) for i in rgb_imgs]
-        spec_mask = [np.zeros((cfg_detect_text_area.n_boxes, img_w // 32, img_h // 32), dtype=float) == 0 for _ in rgb_imgs]
         return resized_imgs
 
-
-    def postprocess(predictions, img, det_th=None):
-        def non_maximum_suppression(boxes, overlapThresh):
-            # if there are no boxes, return an empty list
-            if len(boxes) == 0:
-                return []
-            boxes = np.asarray(boxes).astype("float")
-
-            # initialize the list of picked indexes 
-            pick = []
-
-            # grab the coordinates of the bounding boxes
-            conf = boxes[:,0]
-            x1 = boxes[:,1]
-            y1 = boxes[:,2]
-            x2 = boxes[:,3]
-            y2 = boxes[:,4]
-
-            # compute the area of the bounding boxes and sort the bounding
-            # boxes by the bottom-right y-coordinate of the bounding box
-            area = (x2 - x1 + 1) * (y2 - y1 + 1)
-            idxs = np.argsort(conf)
-
-            # keep looping while some indexes still remain in the indexes
-            # list
-            while len(idxs) > 0:
-                # grab the last index in the indexes list and add the
-                # index value to the list of picked indexes
-                last = len(idxs) - 1
-                i = idxs[last]
-                pick.append(i)
-
-                # find the largest (x, y) coordinates for the start of
-                # the bounding box and the smallest (x, y) coordinates
-                # for the end of the bounding box
-                xx1 = np.maximum(x1[i], x1[idxs[:last]])
-                yy1 = np.maximum(y1[i], y1[idxs[:last]])
-                xx2 = np.minimum(x2[i], x2[idxs[:last]])
-                yy2 = np.minimum(y2[i], y2[idxs[:last]])
-
-                # compute the width and height of the bounding box
-                w = np.maximum(0, xx2 - xx1 + 1)
-                h = np.maximum(0, yy2 - yy1 + 1)
-
-                intersection = w * h
-                union = area[idxs[:last]] + area[idxs[last]] - intersection
-
-                # compute the ratio of overlap
-                # overlap = (w * h) / area[idxs[:last]]
-                overlap = intersection / union
-
-                # delete all indexes from the index list that have
-                idxs = np.delete(idxs, np.concatenate(([last],
-                    np.where(overlap > overlapThresh)[0])))
-
-            # return only the bounding boxes that were picked using the
-            # integer data type
-            return boxes[pick].astype("float")
-        ori_height, ori_width = img.shape[:2]
-        cfg = cfg_detect_text_area
-        [pred_x, pred_y, pred_w, pred_h, pred_conf, pred_prob] = predictions
-
-        _, box_n, klass_num, grid_h, grid_w = pred_prob.shape
-
-        pred_conf_tile = np.tile(pred_conf, (1, 1, klass_num, 1, 1))
-        klass_conf = pred_prob * pred_conf_tile
-
-        width_rate = ori_width / float(cfg.img_w)
-        height_rate = ori_height / float(cfg.img_h)
-
-        boxes = {}
-        for n in range(box_n):
-            for gh in range(grid_h):
-                for gw in range(grid_w):
-
-                    k = np.argmax(klass_conf[0, n, :, gh, gw])
-                    if klass_conf[0, n, k, gh, gw] < (det_th or cfg.det_th):
-                        continue
-
-                    anchor = cfg.anchors[n]
-                    w = pred_w[0, n, 0, gh, gw]
-                    h = pred_h[0, n, 0, gh, gw]
-                    x = pred_x[0, n, 0, gh, gw]
-                    y = pred_y[0, n, 0, gh, gw]
-
-                    center_w_cell = gw + x
-                    center_h_cell = gh + y
-                    box_w_cell = np.exp(w) * anchor[0]
-                    box_h_cell = np.exp(h) * anchor[1]
-
-                    center_w_pixel = center_w_cell * 32
-                    center_h_pixel = center_h_cell * 32
-                    box_w_pixel = box_w_cell * 32
-                    box_h_pixel = box_h_cell * 32
-
-                    xmin = float(center_w_pixel - box_w_pixel // 2)
-                    ymin = float(center_h_pixel - box_h_pixel // 2)
-                    xmax = float(center_w_pixel + box_w_pixel // 2)
-                    ymax = float(center_h_pixel + box_h_pixel // 2)
-                    xmin = np.max([xmin, 0]) * width_rate
-                    ymin = np.max([ymin, 0]) * height_rate
-                    xmax = np.min([xmax, float(cfg.img_w)]) * width_rate
-                    ymax = np.min([ymax, float(cfg.img_h)]) * height_rate
-
-                    klass = cfg.classes_name[k]
-                    if klass not in boxes.keys():
-                        boxes[klass] = []
-
-                    box = [klass_conf[0, n, k, gh, gw], xmin, ymin, xmax, ymax]
-
-                    boxes[klass].append(box)
-
-        # do non-maximum-suppresion
-        nms_boxes = {}
-        if cfg.nms == True:
-            for klass, k_boxes in boxes.items():
-                k_boxes = non_maximum_suppression(k_boxes, cfg.nms_th)
-                nms_boxes[klass] = k_boxes
-        else:
-            nms_boxes = boxes
-
-        output = []
-        for klass, k_boxes in nms_boxes.items():
-            for box_idx, each_box in enumerate(k_boxes):
-                [conf, xmin, ymin, xmax, ymax] = each_box
-                xmin, ymin, xmax, ymax = int(xmin), int(ymin), int(xmax), int(ymax)
-                coor = [xmin, ymin, xmax, ymax]
-
-                xcenter = (xmin + xmax) / 2
-                ycenter = (ymin + ymax) / 2
-
-                width = (xmax - xmin) * enlarge_ratio
-                threshold_w = (xmax - xmin) * threshold
-
-                height = (ymax - ymin) * enlarge_ratio
-                threshold_h = (ymax - ymin) * threshold
-
-                xmin = np.max([0, int(xcenter - width / 2)])
-                threshold_xmin = np.max([0, int(xcenter - threshold_w / 2)])
-
-                ymin = np.max([0, int(ycenter - height / 2)])
-                threshold_ymin = np.max([0, int(ycenter - threshold_h / 2)])
-
-
-                xmax = np.min([ori_width - 1, int(xcenter + width / 2)])
-                threshold_xmax = np.min([ori_width - 1, int(xcenter + threshold_w / 2)])
-
-                ymax = np.min([ori_height - 1, int(ycenter + height / 2)])
-                threshold_ymax = np.min([ori_height - 1, int(ycenter + threshold_h / 2)])
-
-
-                # cropped_img = img[ymin:ymax, xmin:xmax]
-                cropped_img = img[threshold_ymin:threshold_ymax, threshold_xmin:threshold_xmax]
-
-                show_area = [xmin, ymin, xmax, ymax]
-                det_area = [int(xmin - threshold_xmin), int(ymin - threshold_ymin), int(xmax - threshold_xmin), int(ymax - threshold_ymin)]
-                predicted_coors = [threshold_xmin, threshold_ymin, threshold_xmax, threshold_ymax]
-                # print(klass)
-                output.append([cropped_img, {'detect_area': predicted_coors, 'type': klass, 'raw_img': img, 'conf': conf, 'predicted_coor':det_area, 'show_coor':show_area}])
-        return output
-
     def _batch_data(data, batch_size):
-        batched_data = batch_data(data, batch_size)
+        
         spec_mask = [np.ones((i.shape[0], cfg_detect_text_area.n_boxes, img_h // 32, img_w // 32), dtype=bool) for i in batched_data]
         return list(zip(batched_data, spec_mask))
 
     img_h, img_w = cfg_detect_text_area.img_h, cfg_detect_text_area.img_w
-    batch_size = cfg_detect_text_area.batch_size
    
     preprocessed = preprocess(inputs)
-    batches = _batch_data(preprocessed, batch_size = batch_size)
+    # batches = batch_data(preprocessed, cfg_detect_text_area.batch_size)
     
-    # output of model is in order of `['pred_x', 'pred_y', 'pred_w', 'pred_h', 'pred_conf', 'pred_prob']`
-    # as feed `batch_size` minibatch into graph, each element will be shape of (batch_size, n_boxes, value, grid_h, grid_w)
-    # for `pred_prob`, value is n_classes, for others, value is 1
-    # to split (batch_size, n_boxes, value, grid_h, grid_w) tensor into [x] * batch_size list
-    # ---WRONG WAY---
-    # use `np.asarray()` to create (6, batch_size, n_boxes, value, grid_h, grid_w) tensor and then split on axis 1
-    # ---RIGHT WAY---
-    # as n_classes > 1, `np.array()` or `np.vstack()` can't concatenate arrays with different size
-    # just split each output and then put them into one list
-    # batched_preds = [pred_func(i) for i in batches]
+ 
     batched_preds = []
-    for i in batches:
-        text_area_result = pred_func(i)
+    for i in preprocessed:
+
+        text_area_result = pred_func(np.expand_dims(i, axis=0))
+        # pdb.set_trace()
         batched_preds.append(text_area_result)
+    # print(len(batched_preds))
     # ---WRONG WAY---
     # batched_preds = [np.split(np.array(pred_func(i)), len(i[0]), axis = 0) for i in batches]
     # preds = list(np.vstack(batched_preds))
 
     # --RIGHT WAY---
-    preds = []
-    # print("predicted num", len(batched_preds[0]))
-    for each_batch in batched_preds:
-       
-        size = each_batch[0].shape[0]
-        # `['pred_x', 'pred_y', 'pred_w', 'pred_h', 'pred_conf', 'pred_prob']`, and each element is a list of (1, batch_size, n_boxes, value, grid_h, grid_w) tensors
-        out = [np.split(i, size) for i in each_batch]
-        preds.extend([[out[j][i] for j in range(6)] for i in range(size)])
-    postprocessed = [postprocess(preds[i], inputs[i]) for i in range(len(inputs))]
-    return postprocessed
+    output = []
+   
+    for each_idx, each_batch in enumerate(batched_preds):
+        img = inputs[each_idx]
+        ori_height, ori_width = img.shape[:2]
+        boxes = detect_postprocess(each_batch, image_shape=img.shape[0:2], det_th=None)
+        
+        conf_value = 0
+        max_idx = 0
+        for klass, k_boxes in boxes.items():
+            for box_idx, each_box in enumerate(k_boxes):
+                [xmin, ymin, xmax, ymax, conf] = each_box
+                if conf < conf_value:
+                    continue
+                conf_value = conf
+                max_idx = box_idx
 
+        for klass, k_boxes in boxes.items():
+            [xmin, ymin, xmax, ymax, conf] = k_boxes[max_idx]
+            xmin, ymin, xmax, ymax = int(xmin), int(ymin), int(xmax), int(ymax)
+    
+            xcenter = (xmin + xmax) / 2
+            ycenter = (ymin + ymax) / 2
+
+            width = (xmax - xmin) * enlarge_ratio
+            threshold_w = (xmax - xmin) * threshold
+
+            height = (ymax - ymin) * enlarge_ratio
+            threshold_h = (ymax - ymin) * threshold
+
+            xmin = np.max([0, int(xcenter - width / 2)])
+            threshold_xmin = np.max([0, int(xcenter - threshold_w / 2)])
+
+            ymin = np.max([0, int(ycenter - height / 2)])
+            threshold_ymin = np.max([0, int(ycenter - threshold_h / 2)])
+
+
+            xmax = np.min([ori_width - 1, int(xcenter + width / 2)])
+            threshold_xmax = np.min([ori_width - 1, int(xcenter + threshold_w / 2)])
+
+            ymax = np.min([ori_height - 1, int(ycenter + height / 2)])
+            threshold_ymax = np.min([ori_height - 1, int(ycenter + threshold_h / 2)])
+
+
+            # cropped_img = img[ymin:ymax, xmin:xmax]
+            cropped_img = img[threshold_ymin:threshold_ymax, threshold_xmin:threshold_xmax]
+
+            show_area = [xmin, ymin, xmax, ymax]
+            det_area = [int(xmin - threshold_xmin), int(ymin - threshold_ymin), int(xmax - threshold_xmin), int(ymax - threshold_ymin)]
+            predicted_coors = [threshold_xmin, threshold_ymin, threshold_xmax, threshold_ymax]
+            # print(klass)
+            output.append([cropped_img, {'detect_area': predicted_coors, 'type': klass, 'raw_img': img, 'conf': conf, 'predicted_coor':det_area, 'show_coor':show_area}])
+    return output
 def segment_lines(inputs, pred_func):
     def preprocess(inputs):
         def split(img, img_idx):
@@ -1073,7 +928,7 @@ class Extractor():
             
             config_classify_frames = PredictConfig(session_init = weights_classify_frames, model = model_classify_frames, input_names = ['input'], output_names = ['output'])
             config_detect_table = PredictConfig(session_init = weights_detect_table, model = model_detect_table, input_names = ['input', 'spec_mask'], output_names = ['pred_x', 'pred_y', 'pred_w', 'pred_h', 'pred_conf', 'pred_prob'])
-            config_detect_text_area = PredictConfig(session_init = weights_detect_text_area, model = model_detect_text_area, input_names = ['input', 'spec_mask'], output_names = ['pred_x', 'pred_y', 'pred_w', 'pred_h', 'pred_conf', 'pred_prob'])           
+            config_detect_text_area = PredictConfig(session_init = weights_detect_text_area, model = model_detect_text_area, input_names=["input"], output_names=["loc_pred", "cls_pred"])           
             config_segment_lines = PredictConfig(session_init = weights_segment_lines, model = model_segment_lines, input_names = ['input'], output_names = ['softmax_output'])
             # config_recognize_sequences = PredictConfig(session_init = weights_recognize_sequences, model = model_recognize_sequences, input_names = ['feat', 'seqlen'], output_names = ['prediction'])
             config_recognize_english = PredictConfig(session_init = weights_recognize_english, model = model_recognize_english, input_names = ['feat', 'seqlen'], output_names = ['prediction_prob', 'prediction'])
@@ -1193,43 +1048,43 @@ class Extractor():
         pure_outputs = detect_text_area(inputs, pred_func)
         print("after area detect", len(pure_outputs))
         # pdb.set_trace()
-        text_area_list = []
+        # text_area_list = []
         outputs = []
         for i_idx, i in enumerate(pure_outputs):
            
-            if len(i) <= 0:
-                # pdb.set_trace()
-                text_area_list.append(i_idx)
-                continue
-            max_area = []
-            max_area_indx = []
-            for j in range(len(i)):
+            # if len(i) <= 0:
+            #     # pdb.set_trace()
+            #     text_area_list.append(i_idx)
+            #     continue
+            # max_area = []
+            # max_area_indx = []
+            # for j in range(len(i)):
               
-                if i[j][1]['type'] == 'text_area':
-                    max_area.append(i[j][1]['conf'])
-                    max_area_indx.append(j)
-            if len(max_area) <=0:
-                text_area_list.append(i_idx)
-                continue
+            #     if i[j][1]['type'] == 'text_area':
+            #         max_area.append(i[j][1]['conf'])
+            #         max_area_indx.append(j)
+            # if len(max_area) <=0:
+            #     text_area_list.append(i_idx)
+            #     continue
 
-            max_index = max_area_indx[np.argmax(max_area)]
-            data = i[max_index][0]
-            added_information = i[max_index][1]
+            # max_index = max_area_indx[np.argmax(max_area)]
+            # data = i[max_index][0]
+            # added_information = i[max_index][1]
 
             information = deepcopy(informations[i_idx])
 
-            information.update(added_information)
-            outputs.append([data, information])
-        print("no text_area_list ", text_area_list)   
+            information.update(i[1])
+            outputs.append([i[0], information])
+        # print("no text_area_list ", text_area_list)   
         self.output_detect_text_area = outputs
 
         self.output_extract_frames_save = self.output_extract_frames.copy()
-        if len(text_area_list) >= 1:
-            for i_idx, i in enumerate(text_area_list):
-                if i_idx >= 1:
-                    self.output_extract_frames.pop(i-i_idx)
-                else:
-                    self.output_extract_frames.pop(i)
+        # if len(text_area_list) >= 1:
+        #     for i_idx, i in enumerate(text_area_list):
+        #         if i_idx >= 1:
+        #             self.output_extract_frames.pop(i-i_idx)
+        #         else:
+        #             self.output_extract_frames.pop(i)
         print("text area detect num ", len(self.output_detect_text_area), len(self.output_extract_frames))
         # quit()
 
