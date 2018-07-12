@@ -1035,6 +1035,7 @@ class Extractor():
     def _detect_text_area(self):
         if len(self.output_extract_frames) <= 0:
             self.output_detect_text_area = []
+            self.output_extract_frames_save = self.output_extract_frames.copy()
             return
         print('detecting text area...')
         inputs = []
