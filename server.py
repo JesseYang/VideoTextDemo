@@ -27,16 +27,16 @@ class ServerAccept:
         print(os.getpid())
         self.host = host
         self.port= port
-        self.bufsize = 1024*100
-        self.language_name = "english" ## chinese:0 english:1 korean:2 japanese:3
+        self.bufsize = 1024
+        self.language_name = "chinese" ## chinese:0 english:1 korean:2 japanese:3
         self.result_queue = result_queue
         self.socket_server()
 
     def receive_data(self, conn, addr):
+        a=1
         save_file = open("test.mp4", 'wb')
         print(os.getpid())
         try:
-            conn.settimeout(120)
             print(os.getpid())
             buf = b""
             data_len = -1
@@ -59,12 +59,20 @@ class ServerAccept:
 
             save_file.write(buf[5:])
             print("received data size %d , language_name %s" % (data_len, self.language_name))
-            conn.close()
-        except socket.timeout:
-            print("time output: {0}, has closed".format(addr))
-            conn.close()
+            
+        # except socket.timeout:
+        #     print("time output: {0}, has closed".format(addr))
+        #     conn.sendall(struct.pack('b',-2))
+        #     conn.close()
+        except socket.error as e:
+            print("receive data error", e)
+            a=0
+            # conn.sendall(struct.pack('b',-2))
+            # conn.close()
+        return a
 
     def socket_server(self):
+        
         try:
             self.s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             self.s.setsockopt(socket.SOL_SOCKET,socket.SO_REUSEADDR,1)
@@ -73,92 +81,213 @@ class ServerAccept:
             except socket.error as e:
                 print("Bind failed")
                 print(e)
-                sys.exit()
+                # self.result_queue.put(-1)
             self.s.listen(5)
         except:
             print("init socket error!")
-        print(os.getpid())
+            # self.result_queue.put(-2)
 
     def deal_video(self):
+        print("deal video thread started")
 
         ext.from_video("test.mp4", self.language_name)
         ext.save()
         frames = ext.gui(self.language_name)
-
-    def send_result(self, addr, port):
-        time.sleep(2)
-        try:
-            s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            s.connect((addr, 6667))
-        except socket.error as msg:
-            print("client connect error")
-            print(msg)
-            sys.exit(1)
-
-        while True:
-
-            flage, gui_img, pre_txt = self.result_queue.get()
-
-            if flage == 1:
-                img_encode = cv2.imencode('.jpg', gui_img)[1]
-                img_code = np.array(img_encode)
-                str_encode = img_code.tostring()
-                num=len(str_encode)
-                struc_2 = "bbbbbbbbbbb%dsbbbbbbbbbb%ds" % (num, len(pre_txt))
-
-                a=[]
-                for i in str(num):
-                    a.append(int(i))
-                for i in range(10-len(str(num))):
-                    a.append(127)
-
-                b=[]
-                for i in str(len(pre_txt)):
-                    b.append(int(i))
-
-                for i in range(10-len(b)):
-                    b.append(127)
-
-                print(len(str_encode), len(pre_txt))
-                data2 = struct.pack(struc_2, flage, a[0], a[1], a[2], a[3], a[4], a[5], a[6], a[7], a[8], a[9], str_encode, b[0], b[1], b[2], b[3], b[4], b[5], b[6], b[7], b[8], b[9] , pre_txt.encode('utf-8'))
-                s.send(data2)
-                print("send over, pid", os.getpid())
-               
-            elif flage == 0:
-                struc_2 = "bb"
-                data2 = struct.pack(struc_2, flage, gui_img)
-                s.send(data2)
-                print("send over, pid", os.getpid())
-                
-            else:
-                struc_2 = "b"
-                data2 = struct.pack(struc_2, flage)
-                s.send(data2)
-                print("send over, pid", os.getpid())
-                break
-
-        s.close()
-            
+        return frames
     def deal_data(self):
+        print("waiting for connection...")
         while True:
-            print("waiting for connection...")
-            conn, addr = self.s.accept()
-            conn.settimeout(30)
-            print("accept new connection from {0}".format(addr))
-            self.receive_data(conn, addr)
+            try:
+                conn, addr = self.s.accept()
+                print("accept new connection from {0}".format(addr))
+            except Exception as e:
+                # self.result_queue.put(-3)
+                print(e)
+                continue
+            t3=threading.Thread(target=self.socket_send_stage, args=(addr[0],))
+            t3.start()
+            time.sleep(0.5)
+            is_success = self.receive_data(conn, addr)
+        
+            print('start send picture,,,')
+            print('send picture finished')
+          
+            # break 
+            if not is_success:
+                self.result_queue.put(-4)
+                conn.close()
+                continue
+            conn.close()
+            flas =self.deal_video()
+            if flas == 0:
+                print("file error!!!,")
+                print("waiting for connection...")
+                self.result_queue.put(-5)
+                continue
+           
+           
 
-            t=threading.Thread(target=self.deal_video)
+            t=threading.Thread(target=self.socket_send_img, args=(addr[0],))
             t.start()
            
-            t1=threading.Thread(target=self.send_result, args=(addr))
+            t1=threading.Thread(target=self.socket_send_txt, args=(addr[0],))
             t1.start()
+            
+
+
+            #self.send_result(addr[0], 6667)
+            # self.socket_send_img(addr[0])
+            # self.socket_send_txt(addr[0])
+
+    def socket_send_img(self,addr):
+        print(addr)
+        
+        imgs = os.listdir(os.path.join("test_result","gui_frames" ))
+        print("total frame", len(imgs))
+        for im in imgs:
+            try:
+
+                s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                s.setsockopt(socket.SOL_SOCKET,socket.SO_REUSEADDR,1)
+                #s.connect(('192.168.5.158', 10001))
+                s.connect((addr, 10001))
+            except socket.error as msg:
+                print(msg)
+                self.result_queue.put(-6)
+                print(sys.exit(1))
+
+            filepath = os.path.join("test_result","gui_frames", im)
+            # filepath = 'test.png'
+            # fhead = struct.pack(b'128sl', bytes(os.path.basename(filepath), encoding='utf-8'), os.stat(filepath).st_size)
+            # s.send(fhead)
+            print('client filepath: {0}'.format(filepath))
+
+            #fp = open(filepath, 'rb')
+            fp = open(filepath, 'rb')
+            fileSize = os.path.getsize(filepath)
+            print(filepath)
+            print(fileSize)
+            try:
+                s.send(struct.pack('i',fileSize))
+                print('waiting recv OK...')
+                data = s.recv(2)
+                print(' recv OK1...')
+                print('data:')
+                print(type(data))
+                print(data)
+                print('start send 2.jpeg...')
+                while 1:
+                    data = fp.read()
+                    if not data:
+                        print('{0} file send over...'.format(filepath))
+                        break
+                    s.send(data)
+                print(filepath, 'finished')
+                print('start waitting recv OK2')
+                data = s.recv(2)
+                print(' recved OK2...')
+                print('data:')
+                print(type(data))
+                print(data)
+            except socket.error as msg:
+                print("send data error", msg)
+                self.result_queue.put(-7)
+                s.close()
+                sys.exit(1)
+            s.close()
+            # break
+        print("img send over!!!")
+        print("waiting for connection...")
+        time.sleep(1)
+        self.result_queue.put(1)
+        
+    def socket_send_txt(self,addr):
+        print(addr)
+        
+        imgs = os.listdir(os.path.join("test_result","gui_preds" ))
+        print("total text", len(imgs))
+        for im in imgs:
+            try:
+
+                s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                s.setsockopt(socket.SOL_SOCKET,socket.SO_REUSEADDR,1)
+                #s.connect(('192.168.5.158', 10001))
+                s.connect((addr, 10002))
+            except socket.error as msg:
+                print(msg)
+                self.result_queue.put(-8)
+                print(sys.exit(1))
+
+            filepath = os.path.join("test_result","gui_preds", im)
+            # filepath = 'test.png'
+            # fhead = struct.pack(b'128sl', bytes(os.path.basename(filepath), encoding='utf-8'), os.stat(filepath).st_size)
+            # s.send(fhead)
+            print('client filepath: {0}'.format(filepath))
+
+            #fp = open(filepath, 'rb')
+            fp = open(filepath, 'rb')
+            fileSize = os.path.getsize(filepath)
+            print(filepath)
+            print(fileSize)
+
+            try:
+                s.send(struct.pack('i',fileSize))
+                print('waiting recv OK...')
+                data = s.recv(2)
+                print(' recv OK1...')
+                print('data:')
+                print(type(data))
+                print(data)
+                print('start send 2.jpeg...')
+                while 1:
+                    data = fp.read()
+                    if not data:
+                        print('{0} file send over...'.format(filepath))
+                        break
+                    s.send(data)
+                print(filepath, 'finished')
+                print('start waitting recv OK2')
+                data = s.recv(2)
+                print(' recved OK2...')
+                print('data:')
+                print(type(data))
+                print(data)
+            except socket.error as msg:
+                print("send data error", msg)
+                self.result_queue.put(-9)
+                s.close()
+                sys.exit(1)
+            s.close()
+        print("txt send over!!!")
+        print("waiting for connection...")
+                       # break
+
+    def socket_send_stage(self, addr):
+        try:
+
+            s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            s.setsockopt(socket.SOL_SOCKET,socket.SO_REUSEADDR,1)
+            #s.connect(('192.168.5.158', 10001))
+            s.connect((addr, 10003))
+        except socket.error as msg:
+            print(msg)
+            print(sys.exit(1))
+        stage = self.result_queue.get()
+        print("stage ====", stage)
+        s.sendall(struct.pack('b', stage))
+        if stage < 10:
+            s.close()
+            sys.exit(1)
         
 
 if __name__ == '__main__':
+    print('cfg.max_queue_len:')
+   
+    print(cfg.max_queue_len)
   
-    result_queue = Queue(maxsize=cfg.max_queue_len)
-
-    ext = Extractor(result_queue)
+    result_queue = Queue(cfg.max_queue_len)
+    # time.sleep(10000)
+    ext = Extractor()
 
     server_accept = ServerAccept(result_queue)
 

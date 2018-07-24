@@ -714,12 +714,12 @@ def new_extract_lines(self, inputs, ori_coors):
             x, y, w, h = cv2.boundingRect(each_contour)
             tem_w = self.output_detect_text_area[img_idx][1]['detect_area'][2] - self.output_detect_text_area[img_idx][1]['detect_area'][0]
 
-            if (self.output_detect_text_area[img_idx][1]['detect_area'][0] - self.output_detect_text_area[img_idx][1]['show_coor'][0] <= 1) or \
+            if (self.output_detect_text_area[img_idx][1]['show_coor'][0] - self.output_detect_text_area[img_idx][1]['detect_area'][0] <= 1) or \
             (self.output_detect_text_area[img_idx][1]['detect_area'][2] - self.output_detect_text_area[img_idx][1]['show_coor'][2] <= 1):
-                if x <= 3 or (x+w) >= (tem_w-3):
+                if w*h < 210:
                     continue
 
-            if x < ori_coors[img_idx][0] or (x+w) > ori_coors[img_idx][2] or y <= ori_coors[img_idx][1] or (y+h) >= ori_coors[img_idx][3]  or w*h <210:
+            elif x < ori_coors[img_idx][0] or (x+w) > ori_coors[img_idx][2] or y <= ori_coors[img_idx][1] or (y+h) >= ori_coors[img_idx][3]  or w*h <210:
                 continue
 
 
@@ -901,8 +901,8 @@ def recognize_sequences(inputs, pred_func, cfg_recognize_sequences, lm_model):
 
 
 class Extractor():
-    def __init__(self, result_queue):
-        self.result_queue = result_queue
+    def __init__(self):
+       
         def _init_models():
             # Load weights
             self.video_path = ''
@@ -1261,19 +1261,19 @@ class Extractor():
 
 
     def from_video(self,video_path,  language_name='english'):
-        self.result_queue.put([0, 0, 0])
+        # self.result_queue.put([0, 0, 0])
         self._cap_video(video_path)
-        self.result_queue.put([0, 1, 0])
+        # self.result_queue.put([0, 1, 0])
         self._classify_frames()
-        self.result_queue.put([0, 2, 0])
+        # self.result_queue.put([0, 2, 0])
         self._extract_frames()
-        self.result_queue.put([0, 3, 0])
+        # self.result_queue.put([0, 3, 0])
         self._detect_text_area()
-        self.result_queue.put([0, 4, 0])
+        # self.result_queue.put([0, 4, 0])
         self._detect_table()
-        self.result_queue.put([0, 5, 0])
+        # self.result_queue.put([0, 5, 0])
         self._segment_lines()
-        self.result_queue.put([0, 6, 0])
+        # self.result_queue.put([0, 6, 0])
         self._extract_lines()
         # Mapper  Model_recognize_sequences cfg_recognize_sequences
         if language_name == 'english':
@@ -1295,7 +1295,7 @@ class Extractor():
             cfg_recognize_sequences = cfg_recognize_japanese
             Mapper  = Mapper_japanese
 
-        self.result_queue.put([0, 7, 0])
+        # self.result_queue.put([0, 7, 0])
         self._recognize_sequences(pred_func, cfg_recognize_sequences, Mapper)
         self.output_type = 'video'
     def from_image(self, img_paths):
@@ -1317,8 +1317,10 @@ class Extractor():
         import os, shutil
         from datetime import datetime
         video_name  = self.video_path.split("/")[-1]
-        self.filename = 'output-' + video_name + "-" + datetime.now().strftime('%Y%m%d%H%M%S')
+        # self.filename = 'output-' + video_name + "-" + datetime.now().strftime('%Y%m%d%H%M%S')
+        self.filename="test_result"
         filename = self.filename
+       
         if os.path.isdir(filename):
             shutil.rmtree(filename)
         os.mkdir(filename)
@@ -1489,10 +1491,10 @@ class Extractor():
             return l
         self.gui_frames = []
         if len(self.frames) <= 0:
-            self.result_queue.put([-1,-1,-1])
-            return 9
+            # self.result_queue.put([-1,-1,-1])
+            return 0
         if len(self.output_recognize_sequences) <= 0:
-            self.result_queue.put([-1,-1,-1])
+            # self.result_queue.put([-1,-1,-1])
             return 0
         # pdb.set_trace()
         for idx in range(len(self.output_segment_lines)):
@@ -1741,9 +1743,11 @@ class Extractor():
             #         open('{}/gui_preds/{}.txt'.format(self.filename, idx), 'w').write(pred)
             #     else:
             #         open('{}/gui_preds/{}.txt'.format(self.filename, idx), 'w').write(pred)
-        for i in range(len(self.gui_preds)):
-            self.result_queue.put([1, self.gui_frames[i], self.gui_preds[i]])
-        self.result_queue.put([-1,-1,-1])
+        return 1
+        # for i in range(len(self.gui_preds)):
+            
+            # self.result_queue.put([1, self.gui_frames[i], self.gui_preds[i]])
+        # self.result_queue.put([-1,-1,-1])
 if __name__ == '__main__':
 
     ext = Extractor()

@@ -714,12 +714,12 @@ def new_extract_lines(self, inputs, ori_coors):
             x, y, w, h = cv2.boundingRect(each_contour)
             tem_w = self.output_detect_text_area[img_idx][1]['detect_area'][2] - self.output_detect_text_area[img_idx][1]['detect_area'][0]
 
-            if (self.output_detect_text_area[img_idx][1]['detect_area'][0] - self.output_detect_text_area[img_idx][1]['show_coor'][0] <= 1) or \
+            if (self.output_detect_text_area[img_idx][1]['show_coor'][0] - self.output_detect_text_area[img_idx][1]['detect_area'][0] <= 1) or \
             (self.output_detect_text_area[img_idx][1]['detect_area'][2] - self.output_detect_text_area[img_idx][1]['show_coor'][2] <= 1):
-                if x <= 3 or (x+w) >= (tem_w-3):
+                if w*h < 210:
                     continue
 
-            if x < ori_coors[img_idx][0] or (x+w) > ori_coors[img_idx][2] or y <= ori_coors[img_idx][1] or (y+h) >= ori_coors[img_idx][3]  or w*h <210:
+            elif x < ori_coors[img_idx][0] or (x+w) > ori_coors[img_idx][2] or y <= ori_coors[img_idx][1] or (y+h) >= ori_coors[img_idx][3]  or w*h <210:
                 continue
 
 
@@ -1643,7 +1643,8 @@ class Extractor():
                         if len(single_line[0][55:90].strip(' ')) > 0 and len(single_line[0][10:50].strip())>5:
                             cmp_buffer.append(single_line[0][20:47].strip(' '))
                             cmp_buffer.append(single_line[0][40:99].strip(' '))
-                    # cmp_buffer.append(single_line[0].strip(' '))
+                    # if len(single_line[0].strip(' ')) >= 5:
+                    #   cmp_buffer.append(single_line[0].strip(' '))
 
                 
             # for singe_line_idx, single_line in enumerate(pred_each_frame):
