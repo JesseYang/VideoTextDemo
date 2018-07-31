@@ -234,7 +234,7 @@ def detect_table(inputs, pred_func, enlarge_ratio=1):
         # resize images and convert BGR to RGB
         rgb_imgs = [cv2.cvtColor(i, cv2.COLOR_BGR2RGB) for i in inputs]
         resized_imgs = [cv2.resize(i, (img_w, img_h)) for i in rgb_imgs]
-        spec_mask = [np.zeros((cfg_detect_table.n_boxes, img_w // 32, img_h // 32), dtype=float) == 0 for _ in rgb_imgs]
+        # spec_mask = [np.zeros((cfg_detect_table.n_boxes, img_w // 32, img_h // 32), dtype=float) == 0 for _ in rgb_imgs]
         return resized_imgs
 
 
@@ -383,11 +383,11 @@ def detect_table(inputs, pred_func, enlarge_ratio=1):
 
     def _batch_data(data, batch_size):
         batched_data = batch_data(data, batch_size)
-        spec_mask = [np.ones((i.shape[0], cfg_detect_text_area.n_boxes, img_h // 32, img_w // 32), dtype=bool) for i in batched_data]
+        spec_mask = [np.zeros((i.shape[0], cfg_detect_table.n_boxes, img_h // 32, img_w // 32), dtype=float) == 0 for i in batched_data]
         return list(zip(batched_data, spec_mask))
 
-    img_h, img_w = cfg_detect_text_area.img_h, cfg_detect_text_area.img_w
-    batch_size = cfg_detect_text_area.batch_size
+    img_h, img_w = cfg_detect_table.img_h, cfg_detect_table.img_w
+    batch_size = cfg_detect_table.batch_size
    
     preprocessed = preprocess(inputs)
     batches = _batch_data(preprocessed, batch_size = batch_size)
@@ -422,7 +422,7 @@ def detect_table(inputs, pred_func, enlarge_ratio=1):
     postprocessed = [postprocess(preds[i], inputs[i]) for i in range(len(inputs))]
     return postprocessed
 
-def detect_text_area(inputs, pred_func, enlarge_ratio=1.15, threshold=1.25):
+def detect_text_area(inputs, pred_func, enlarge_ratio=1.1 ):
     def preprocess(inputs):
         # resize images and convert BGR to RGB
         resized_imgs = []
@@ -474,41 +474,42 @@ def detect_text_area(inputs, pred_func, enlarge_ratio=1.15, threshold=1.25):
                 conf_value = conf
                 max_idx = box_idx
 
-        for klass, k_boxes in boxes.items():
-            [xmin, ymin, xmax, ymax, conf] = k_boxes[max_idx]
-            xmin, ymin, xmax, ymax = int(xmin), int(ymin), int(xmax), int(ymax)
-    
-            xcenter = (xmin + xmax) / 2
-            ycenter = (ymin + ymax) / 2
+            for klass, k_boxes in boxes.items():
+                [xmin, ymin, xmax, ymax, conf] = k_boxes[max_idx]
+                xmin, ymin, xmax, ymax = int(xmin), int(ymin), int(xmax), int(ymax)
+        
+                xcenter = (xmin + xmax) / 2
+                ycenter = (ymin + ymax) / 2
 
-            width = (xmax - xmin) * enlarge_ratio
-            threshold_w = (xmax - xmin) * threshold
+                width = (xmax - xmin) * enlarge_ratio
+                # threshold_w = (xmax - xmin) * threshold
 
-            height = (ymax - ymin) * enlarge_ratio
-            threshold_h = (ymax - ymin) * threshold
+                height = (ymax - ymin) * enlarge_ratio
+                # threshold_h = (ymax - ymin) * threshold
 
-            xmin = np.max([0, int(xcenter - width / 2)])
-            threshold_xmin = np.max([0, int(xcenter - threshold_w / 2)])
+                xmin = np.max([0, int(xcenter - width / 2)])
+                # threshold_xmin = np.max([0, int(xcenter - threshold_w / 2)])
 
-            ymin = np.max([0, int(ycenter - height / 2)])
-            threshold_ymin = np.max([0, int(ycenter - threshold_h / 2)])
-
-
-            xmax = np.min([ori_width - 1, int(xcenter + width / 2)])
-            threshold_xmax = np.min([ori_width - 1, int(xcenter + threshold_w / 2)])
-
-            ymax = np.min([ori_height - 1, int(ycenter + height / 2)])
-            threshold_ymax = np.min([ori_height - 1, int(ycenter + threshold_h / 2)])
+                ymin = np.max([0, int(ycenter - height / 2)])
+                # threshold_ymin = np.max([0, int(ycenter - threshold_h / 2)])
 
 
-            # cropped_img = img[ymin:ymax, xmin:xmax]
-            cropped_img = img[threshold_ymin:threshold_ymax, threshold_xmin:threshold_xmax]
+                xmax = np.min([ori_width - 1, int(xcenter + width / 2)])
+                # threshold_xmax = np.min([ori_width - 1, int(xcenter + threshold_w / 2)])
 
-            show_area = [xmin, ymin, xmax, ymax]
-            det_area = [int(xmin - threshold_xmin), int(ymin - threshold_ymin), int(xmax - threshold_xmin), int(ymax - threshold_ymin)]
-            predicted_coors = [threshold_xmin, threshold_ymin, threshold_xmax, threshold_ymax]
-            # print(klass)
-            output.append([cropped_img, {'detect_area': predicted_coors, 'type': klass, 'raw_img': img, 'conf': conf, 'predicted_coor':det_area, 'show_coor':show_area}])
+                ymax = np.min([ori_height - 1, int(ycenter + height / 2)])
+                # threshold_ymax = np.min([ori_height - 1, int(ycenter + threshold_h / 2)])
+
+
+                cropped_img = img[ymin:ymax, xmin:xmax]
+                # cropped_img = img[threshold_ymin:threshold_ymax, threshold_xmin:threshold_xmax]
+
+                show_area = [xmin, ymin, xmax, ymax]
+                # det_area = [int(xmin - threshold_xmin), int(ymin - threshold_ymin), int(xmax - threshold_xmin), int(ymax - threshold_ymin)]
+                # predicted_coors = [threshold_xmin, threshold_ymin, threshold_xmax, threshold_ymax]
+                # print(klass)
+                output.append([cropped_img, {'detect_area': show_area, 'type': klass, 'raw_img': img, 'conf': conf}])
+        
     return output
 def segment_lines(inputs, pred_func):
     def preprocess(inputs):
@@ -713,15 +714,17 @@ def new_extract_lines(self, inputs, ori_coors):
         for each_id, each_contour in enumerate(contours):
             x, y, w, h = cv2.boundingRect(each_contour)
             tem_w = self.output_detect_text_area[img_idx][1]['detect_area'][2] - self.output_detect_text_area[img_idx][1]['detect_area'][0]
+            tem_h = self.output_detect_text_area[img_idx][1]['detect_area'][3] - self.output_detect_text_area[img_idx][1]['detect_area'][1]
 
-            if (self.output_detect_text_area[img_idx][1]['show_coor'][0] - self.output_detect_text_area[img_idx][1]['detect_area'][0] <= 1) or \
-            (self.output_detect_text_area[img_idx][1]['detect_area'][2] - self.output_detect_text_area[img_idx][1]['show_coor'][2] <= 1):
-                if w*h < 210:
-                    continue
+            # if (self.output_detect_text_area[img_idx][1]['show_coor'][0] - self.output_detect_text_area[img_idx][1]['detect_area'][0] <= 1) or \
+            # (self.output_detect_text_area[img_idx][1]['detect_area'][2] - self.output_detect_text_area[img_idx][1]['show_coor'][2] <= 1):
+            #     if w*h < 210:
+            #         continue
 
-            elif x < ori_coors[img_idx][0] or (x+w) > ori_coors[img_idx][2] or y <= ori_coors[img_idx][1] or (y+h) >= ori_coors[img_idx][3]  or w*h <210:
+            # elif x < ori_coors[img_idx][0] or (x+w) > ori_coors[img_idx][2] or y <= ori_coors[img_idx][1] or (y+h) >= ori_coors[img_idx][3]  or w*h <210:
+            #     continue
+            if (x+w) < 1 or x > (tem_w-1) or y < 5 or (y+h) > (tem_h-5) or w*h <= 250:
                 continue
-
 
             flage_count = 0
             if len(self.output_detect_table[img_idx][1]) > 0:
@@ -1202,12 +1205,12 @@ class Extractor():
         print(len(self.output_detect_text_area), len(self.output_segment_lines))
         inputs = []
         informations = []
-        ori_coors = []
+        # ori_coors = []
         for i,j in zip(self.output_detect_text_area, self.output_segment_lines):
             inputs.append([i[0], j[0]])
             informations.append(j[1])
-            ori_coors.append(j[1]['predicted_coor'])
-        pure_outputs, right_idx_lists = new_extract_lines(self,inputs, ori_coors)
+            # ori_coors.append(j[1]['predicted_coor'])
+        pure_outputs, right_idx_lists = new_extract_lines(self,inputs)
         print("after new extractt_lines", len(pure_outputs), "after new extract_lines right_list num", len(right_idx_lists))
         right_list = list(set(right_idx_lists))
         print("last, after new extract_lines", len(right_list))
@@ -1505,7 +1508,7 @@ class Extractor():
             origin_h, origin_w = img.shape[:2]
             mask = np.copy(self.output_segment_lines[idx][0])
             x, y, x_end, y_end = self.output_segment_lines[idx][1]['detect_area']
-            x1, y1, x_end1, y_end1 = self.output_segment_lines[idx][1]['show_coor']
+            # x1, y1, x_end1, y_end1 = self.output_segment_lines[idx][1]['show_coor']
             filled = mask.astype(np.uint8).copy()
             # for line in self.output_recognize_sequences:
                 # same frame and same area
@@ -1520,7 +1523,7 @@ class Extractor():
             mask_img[:,:,2][mask] = 255
             img = img * 0.7 + mask_img * 0.3
             cv2.rectangle(img, (x,y), (x_end, y_end), (0, 0, 255), 4)
-            cv2.rectangle(img, (x1,y1), (x_end1, y_end1), (255, 255, 0), 2)
+            # cv2.rectangle(img, (x1,y1), (x_end1, y_end1), (255, 255, 0), 2)
 
             if len(self.output_detect_table[idx][1]) > 0:
                 for table_coor in self.output_detect_table[idx][1]:
@@ -1594,7 +1597,7 @@ class Extractor():
             
             buffer_list = []
             output_lines = []
-            text_area_coor = pred_each_frame[0][1]['show_coor']
+            text_area_coor = pred_each_frame[0][1]['detect_area']
             x = text_area_coor[0]
             y = text_area_coor[1]
             w = text_area_coor[2] - text_area_coor[0]

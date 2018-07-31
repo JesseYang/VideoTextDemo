@@ -10,6 +10,7 @@ from enum import Enum
 import os
 from queue import Queue
 from threading import Thread
+import argparse
 
 from demo_terminal_server import Extractor
 
@@ -25,6 +26,7 @@ import pickle
 class ServerAccept:
     def __init__(self, result_queue, host='192.168.5.41', port=8117):
         print(os.getpid())
+        self.flage= False
         self.host = host
         self.port= port
         self.bufsize = 1024
@@ -72,6 +74,7 @@ class ServerAccept:
         return a
 
     def socket_server(self):
+        print(self.host)
         
         try:
             self.s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -81,8 +84,12 @@ class ServerAccept:
             except socket.error as e:
                 print("Bind failed")
                 print(e)
+                sys.exit(1)
                 # self.result_queue.put(-1)
+           
+            self.flage=True
             self.s.listen(5)
+
         except:
             print("init socket error!")
             # self.result_queue.put(-2)
@@ -281,14 +288,18 @@ class ServerAccept:
         
 
 if __name__ == '__main__':
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--ip', help='ip address of server', default='192.168.5.41')
+    args = parser.parse_args()
     print('cfg.max_queue_len:')
    
     print(cfg.max_queue_len)
   
     result_queue = Queue(cfg.max_queue_len)
     # time.sleep(10000)
-    ext = Extractor()
+    # ext = Extractor()
 
-    server_accept = ServerAccept(result_queue)
-
-    server_accept.deal_data()
+    server_accept = ServerAccept(result_queue, host=args.ip)
+   
+    if server_accept.flage:
+        server_accept.deal_data()
