@@ -115,14 +115,11 @@ class ServerAccept:
                 print(e)
                 continue
             self.result_queue.queue.clear()
-            t3=threading.Thread(target=self.socket_send_stage, args=(addr[0],))
-            t3.start()
-            # time.sleep(0.5)
+
+            
             is_success = self.receive_data(conn, addr)
         
-            print('start send picture,,,')
-            print('send picture finished')
-          
+        
             # break 
             if not is_success:
                 self.result_queue.put(-4)
@@ -130,8 +127,10 @@ class ServerAccept:
                 continue
             conn.close()
 
-
-            flas =self.deal_video()
+            t3=threading.Thread(target=self.socket_send_stage, args=(addr[0],))
+            t3.start()
+            time.sleep(1)
+            flas=self.deal_video()
             if flas == 0:
                 print("file error!!!,")
                 print("waiting for connection...")
@@ -139,7 +138,7 @@ class ServerAccept:
                 continue
            
            
-
+            time.sleep(0.5)
             t=threading.Thread(target=self.socket_send_img, args=(addr[0],))
             t.start()
            
@@ -279,23 +278,25 @@ class ServerAccept:
                        # break
 
     def socket_send_stage(self, addr):
-
+        print(addr)
         while True:
             try:
                 ss = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-                ss.setsockopt(socket.SOL_SOCKET,socket.SO_REUSEADDR,1)
-                #ss.connect(('192.168.5.158', 10001))
+                ss.setsockopt(socket.SOL_SOCKET,socket.SO_REUSEADDR,1)  
                 ss.connect((addr, 10003))
+                print("send stage connected ok")
             except socket.error as msg:
-                print("connect server to sednd",msg)
+                print("connect server to send stage",msg)
                 print(sys.exit(1))
-                stage = self.result_queue.get()
-                print("stage ====", stage)
-                ss.sendall(struct.pack('b', stage))
-                if stage < 0 or stage == 9:
-                    # self.result_queue.queue.clear()
-                    ss.close()
-                    sys.exit(1)
+ 
+            stage = self.result_queue.get()
+            print("stage ====", stage)
+            ss.sendall(struct.pack('b', stage))
+            if stage < 0:
+                # self.result_queue.queue.clear()
+                ss.close()
+                break
+        # sys.exit(1)
         
 
 if __name__ == '__main__':
