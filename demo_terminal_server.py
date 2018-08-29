@@ -475,6 +475,8 @@ def detect_text_area(inputs, pred_func, enlarge_ratio=1.1 ):
                 max_idx = box_idx
 
             for klass, k_boxes in boxes.items():
+                if (len(k_boxes)==0):
+                    continue
                 [xmin, ymin, xmax, ymax, conf] = k_boxes[max_idx]
                 xmin, ymin, xmax, ymax = int(xmin), int(ymin), int(xmax), int(ymax)
         
@@ -508,7 +510,7 @@ def detect_text_area(inputs, pred_func, enlarge_ratio=1.1 ):
                 # det_area = [int(xmin - threshold_xmin), int(ymin - threshold_ymin), int(xmax - threshold_xmin), int(ymax - threshold_ymin)]
                 # predicted_coors = [threshold_xmin, threshold_ymin, threshold_xmax, threshold_ymax]
                 # print(klass)
-                output.append([cropped_img, {'detect_area': show_area, 'type': klass, 'raw_img': img, 'conf': conf}])
+                output.append([cropped_img, {'detect_area': show_area, 'type': klass, 'raw_img': img, 'conf': conf, 'last_frame_id':each_idx}])
         
     return output
 def segment_lines(inputs, pred_func):
@@ -1076,7 +1078,7 @@ class Extractor():
             # data = i[max_index][0]
             # added_information = i[max_index][1]
 
-            information = deepcopy(informations[i_idx])
+            information = deepcopy(informations[i[1]['last_frame_id']])
 
             information.update(i[1])
             outputs.append([i[0], information])
