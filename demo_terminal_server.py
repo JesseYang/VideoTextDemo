@@ -624,7 +624,7 @@ def segment_lines(inputs, pred_func):
 
     return postprocessed
 
-def new_extract_lines(self, inputs, ori_coors):
+def new_extract_lines(self, inputs):
     def savitzky_golay(y, window_size, order, deriv=0, rate=1):
         # from: http://scipy.github.io/old-wiki/pages/Cookbook/SavitzkyGolay
         r"""Smooth (and optionally differentiate) data with a Savitzky-Golay filter.
@@ -904,8 +904,8 @@ def recognize_sequences(inputs, pred_func, cfg_recognize_sequences, lm_model):
 
 
 class Extractor():
-    def __init__(self):
-       
+    def __init__(self, result_queue):
+        self.result_queue = result_queue
         def _init_models():
             # Load weights
             self.video_path = ''
@@ -1210,7 +1210,7 @@ class Extractor():
             inputs.append([i[0], j[0]])
             informations.append(j[1])
             # ori_coors.append(j[1]['predicted_coor'])
-        pure_outputs, right_idx_lists = new_extract_lines(self,inputs)
+        pure_outputs, right_idx_lists = new_extract_lines(self, inputs)
         print("after new extractt_lines", len(pure_outputs), "after new extract_lines right_list num", len(right_idx_lists))
         right_list = list(set(right_idx_lists))
         print("last, after new extract_lines", len(right_list))
@@ -1264,19 +1264,19 @@ class Extractor():
 
 
     def from_video(self,video_path,  language_name='english'):
-        # self.result_queue.put([0, 0, 0])
+        self.result_queue.put(1)
         self._cap_video(video_path)
-        # self.result_queue.put([0, 1, 0])
+        self.result_queue.put(2)
         self._classify_frames()
-        # self.result_queue.put([0, 2, 0])
+        self.result_queue.put(3)
         self._extract_frames()
-        # self.result_queue.put([0, 3, 0])
+        self.result_queue.put(4)
         self._detect_text_area()
-        # self.result_queue.put([0, 4, 0])
+        self.result_queue.put(5)
         self._detect_table()
-        # self.result_queue.put([0, 5, 0])
+        self.result_queue.put(6)
         self._segment_lines()
-        # self.result_queue.put([0, 6, 0])
+        self.result_queue.put(7)
         self._extract_lines()
         # Mapper  Model_recognize_sequences cfg_recognize_sequences
         if language_name == 'english':
@@ -1298,7 +1298,7 @@ class Extractor():
             cfg_recognize_sequences = cfg_recognize_japanese
             Mapper  = Mapper_japanese
 
-        # self.result_queue.put([0, 7, 0])
+        self.result_queue.put(8)
         self._recognize_sequences(pred_func, cfg_recognize_sequences, Mapper)
         self.output_type = 'video'
     def from_image(self, img_paths):
@@ -1353,7 +1353,7 @@ class Extractor():
             # cv2.imwrite('{}/detect_text_area/{}.png'.format(self.filename,data[1]['frame_idx']), img)
             # table_count += 1
 
-        if not cfg.isSaveResult:
+        if 1==1:
             dirs = ['gui_frames', 'gui_preds']
             for i in dirs:
                 os.mkdir('{}/{}'.format(self.filename, i))
@@ -1494,10 +1494,10 @@ class Extractor():
             return l
         self.gui_frames = []
         if len(self.frames) <= 0:
-            # self.result_queue.put([-1,-1,-1])
+            # self.result_queue.put(9)
             return 0
         if len(self.output_recognize_sequences) <= 0:
-            # self.result_queue.put([-1,-1,-1])
+            # self.result_queue.put(9)
             return 0
         # pdb.set_trace()
         for idx in range(len(self.output_segment_lines)):
