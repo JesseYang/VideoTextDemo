@@ -29,7 +29,7 @@ class ServerAccept:
         self.flage= False
         self.host = host
         self.port= port
-        self.bufsize = 1024
+        self.bufsize = 10240
         self.language_name = "chinese" ## chinese:0 english:1 korean:2 japanese:3
         self.result_queue = result_queue
         self.socket_server()
@@ -42,15 +42,31 @@ class ServerAccept:
             print(os.getpid())
             buf = b""
             data_len = -1
+            first_packet = True
+            recv_len = 0
             while True:
                 tem_buf = conn.recv(self.bufsize)
+                recv_len += len(tem_buf)
                
-                buf += tem_buf
-                if len(buf) >=4 and data_len == -1:
-                    data_len = (buf[0]<<24) + (buf[1]<<16) + (buf[2]<<8) + buf[3]
-                if data_len != -1 and (data_len+5) == len(buf):
+                # print(recv_len)
+
+                # buf += tem_buf
+                # if len(buf) >=4 and data_len == -1:
+                if first_packet == True:
+                    data_len = (tem_buf[0]<<24) + (tem_buf[1]<<16) + (tem_buf[2]<<8) + tem_buf[3]
+                    language_idx = tem_buf[4]
+
+                if first_packet == True:
+                    save_file.write(tem_buf[5:])
+                    first_packet = False
+                else:
+                    save_file.write(tem_buf)
+
+                if data_len != -1 and (data_len+5) == recv_len:
                     break
-            language_idx = buf[4]
+
+                
+            # language_idx = buf[4]
             # print(buf[0:1024*3])
             if language_idx == 0:
                 self.language_name = "chinese"
@@ -180,6 +196,7 @@ class ServerAccept:
             print(filepath)
             print(fileSize)
             try:
+                print('=========================================================img----{0}'.format(1 if im!=(len(imgs)-1) else 0))
                 s.send(struct.pack('i',1 if im!=(len(imgs)-1) else 0))
                 s.send(struct.pack('i',fileSize))
                 print('waiting recv OK...')
@@ -188,7 +205,7 @@ class ServerAccept:
                 print('data:')
                 print(type(data))
                 print(data)
-                print('start send 2.jpeg...')
+                # print('start send 2.jpeg...')
 
                 while 1:
                     data = fp.read()
@@ -245,6 +262,7 @@ class ServerAccept:
             print(fileSize)
 
             try:
+                print('=========================================================txt----{0}'.format(1 if im!=(len(imgs)-1) else 0))
                 s.send(struct.pack('i',1 if im!=(len(imgs)-1) else 0))
                 s.send(struct.pack('i',fileSize))
                 print('waiting recv OK...')
@@ -253,7 +271,7 @@ class ServerAccept:
                 print('data:')
                 print(type(data))
                 print(data)
-                print('start send 2.jpeg...')
+                # print('start send 2.jpeg...')
                 while 1:
                     data = fp.read()
                     if not data:

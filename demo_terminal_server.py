@@ -712,11 +712,13 @@ def new_extract_lines(self, inputs):
 
         # find all contours
         im2, contours, hierarchy = cv2.findContours(mask.astype(np.uint8), cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
+        
+
+        tem_w = self.output_detect_text_area[img_idx][1]['detect_area'][2] - self.output_detect_text_area[img_idx][1]['detect_area'][0]
+        tem_h = self.output_detect_text_area[img_idx][1]['detect_area'][3] - self.output_detect_text_area[img_idx][1]['detect_area'][1]
 
         for each_id, each_contour in enumerate(contours):
             x, y, w, h = cv2.boundingRect(each_contour)
-            tem_w = self.output_detect_text_area[img_idx][1]['detect_area'][2] - self.output_detect_text_area[img_idx][1]['detect_area'][0]
-            tem_h = self.output_detect_text_area[img_idx][1]['detect_area'][3] - self.output_detect_text_area[img_idx][1]['detect_area'][1]
 
             # if (self.output_detect_text_area[img_idx][1]['show_coor'][0] - self.output_detect_text_area[img_idx][1]['detect_area'][0] <= 1) or \
             # (self.output_detect_text_area[img_idx][1]['detect_area'][2] - self.output_detect_text_area[img_idx][1]['show_coor'][2] <= 1):
@@ -725,7 +727,7 @@ def new_extract_lines(self, inputs):
 
             # elif x < ori_coors[img_idx][0] or (x+w) > ori_coors[img_idx][2] or y <= ori_coors[img_idx][1] or (y+h) >= ori_coors[img_idx][3]  or w*h <210:
             #     continue
-            if (x+w) < 1 or x > (tem_w-1) or y < 5 or (y+h) > (tem_h-5) or w*h <= 250:
+            if (x <= 10 and w < tem_w//5) or ((x+w)>= (tem_w-10) and w < tem_w//5) or (x+h)<=10 or x>=(tem_h-10) or w*h <=1000:
                 continue
 
             flage_count = 0
@@ -1222,18 +1224,22 @@ class Extractor():
             error_list = list(set([i for i in range(len(self.output_detect_text_area))]).difference(set(right_list)))
             print("error_list", error_list)
             print(error_list)
-        # if len(error_idx_lists) > 0:
-        #     for err_x in error_idx_lists:
-        #         inputs = inputs.remove(inputs[err_x])
-        #         informations = informations.remove(informations[err_x])
-
-
+        
+        error_list_frame_idx = []
+        if len(error_list) > 0:
+            
+            for err_x in range(len(self.output_detect_text_area)):
+                if err_x in error_list:
+                    error_list_frame_idx.append(self.output_detect_text_area[err_x][1]['frame_idx'])
+        
+        print(error_list_frame_idx)
 
         grouped = [list(g) for k,g in groupby(pure_outputs, lambda x: x[1]['img_idx'])]
         outputs = []
         print("grouped", len(grouped))
         for i in range(len(grouped)):
-            added_information = deepcopy(informations[i]) 
+            ii = right_list[i]
+            added_information = deepcopy(informations[ii]) 
             for j in grouped[i]:
                 data = j[0]
                 information = j[1]
@@ -1241,7 +1247,7 @@ class Extractor():
                 information.update(added_information)
                 outputs.append([data, information])
         self.output_extract_lines = outputs
-        self.output_error_list = error_list
+        self.output_error_list = error_list_frame_idx
       
     def _recognize_sequences(self, pred_func, cfg_recognize_sequences, lm_model):
         print('recognizing sequences...')
@@ -1502,11 +1508,12 @@ class Extractor():
             # self.result_queue.put(9)
             return 0
         # pdb.set_trace()
+        pre_frame_id = []
         for idx in range(len(self.output_segment_lines)):
             # img = np.copy(self.output_extract_frames[idx][0])
             ids_ = self.output_segment_lines[idx][1]['frame_idx']
             img = np.copy(self.frames[ids_])
-
+            pre_frame_id.append(ids_)
             origin_h, origin_w = img.shape[:2]
             mask = np.copy(self.output_segment_lines[idx][0])
             x, y, x_end, y_end = self.output_segment_lines[idx][1]['detect_area']
@@ -1705,11 +1712,18 @@ class Extractor():
         print(len(self.gui_preds), len(self.gui_frames))
         print("repeat frame num:")
         print(repeat_value)
+        repeat_value_frame_idx = []
+
+        for repeat_idx in range(len(predictions_per_frame)):
+            if repeat_idx in repeat_value:
+                repeat_value_frame_idx.append(predictions_per_frame[repeat_idx][0][1]['frame_idx'])
+
+        print("last frame idx", self.output_error_list, repeat_value_frame_idx)
         gui_frame_tem = []
         gui_preds_tem = []
         save_id = 0
         for idx, img in enumerate(self.gui_frames):
-            if idx in repeat_value:
+            if  pre_frame_id[idx] in repeat_value_frame_idx:
                 continue
             gui_frame_tem.append(img)
             cv2.imwrite('{}/gui_frames/{}.png'.format(self.filename, save_id), img)
@@ -1729,10 +1743,11 @@ class Extractor():
             self.new_gui_freds = []
             count_index = 0
             save_id = 0
+           
             for idx in range(len(self.output_detect_text_area)):
-                # if idx in repeat_value:
-                #     continue
-                if idx in self.output_error_list:
+                if self.output_detect_text_area[idx][1]['frame_idx'] in repeat_value_frame_idx:
+                    continue
+                if self.output_detect_text_area[idx][1]['frame_idx'] in self.output_error_list:
                     open('{}/gui_preds/{}.txt'.format(self.filename, save_id), 'w').write("                 ")
                     save_id += 1
                     self.new_gui_freds.append("                ")
