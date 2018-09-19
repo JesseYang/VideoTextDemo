@@ -11,12 +11,13 @@ import os
 from queue import Queue
 from threading import Thread
 import argparse
-
+import shutil
 from demo_terminal_server import Extractor
 
 # from visualize import VisualizeGUI
 # from audio import AudioThread
-
+from datetime import datetime
+  
 from cfgs.config import cfg
 import pdb
 
@@ -32,11 +33,15 @@ class ServerAccept:
         self.bufsize = 10240
         self.language_name = "chinese" ## chinese:0 english:1 korean:2 japanese:3
         self.result_queue = result_queue
+        if not os.path.exists("received_videos"):
+            os.mkdir("received_videos")
+        # self.save_file_name = ""
         self.socket_server()
 
     def receive_data(self, conn, addr):
         a=1
-        save_file = open("test.mp4", 'wb')
+        self.save_file_name = os.path.join("received_videos", datetime.now().strftime('%Y%m%d%H%M%S')+".mp4")
+        save_file = open(self.save_file_name, 'wb')
         print(os.getpid())
         try:
             print(os.getpid())
@@ -77,7 +82,7 @@ class ServerAccept:
             else:
                 self.language_name = "japanese"
 
-            save_file.write(buf[5:])
+            # self.save_file.write(buf[5:])
             print("received data size %d , %d, language_name %s" % (data_len,  len(buf[5:]), self.language_name))
             
         # except socket.timeout:
@@ -115,7 +120,7 @@ class ServerAccept:
     def deal_video(self):
         print("deal video thread started")
 
-        ext.from_video("test.mp4", self.language_name)
+        ext.from_video(self.save_file_name, self.language_name)
         self.result_queue.put(9)
         ext.save()
         frames = ext.gui(self.language_name)
