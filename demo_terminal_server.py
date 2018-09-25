@@ -1059,6 +1059,7 @@ class Extractor():
         # pdb.set_trace()
         # text_area_list = []
         outputs = []
+        self.detected_text_area_frame_idx = []
         for i_idx, i in enumerate(pure_outputs):
            
             # if len(i) <= 0:
@@ -1084,6 +1085,9 @@ class Extractor():
 
             information.update(i[1])
             outputs.append([i[0], information])
+            # pdb.set_trace()
+            
+            self.detected_text_area_frame_idx.append(information['frame_idx'])
         # print("no text_area_list ", text_area_list)   
         self.output_detect_text_area = outputs
 
@@ -1094,7 +1098,8 @@ class Extractor():
         #             self.output_extract_frames.pop(i-i_idx)
         #         else:
         #             self.output_extract_frames.pop(i)
-        print("text area detect num ", len(self.output_detect_text_area), len(self.output_extract_frames))
+        print("detect text_area frame id, ", self.detected_text_area_frame_idx)
+        print("text area detect num ", len(self.output_detect_text_area),  "extract_frame num", len(self.output_extract_frames))
         # quit()
 
     def _detect_table(self):
@@ -1106,6 +1111,8 @@ class Extractor():
         informations = []
         
         for i in self.output_extract_frames:
+            if i[1]['frame_idx'] not in self.detected_text_area_frame_idx:
+                continue
             inputs.append(i[0])
             informations.append(i[1])
         pred_func = self.predictor_detect_table

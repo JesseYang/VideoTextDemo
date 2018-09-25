@@ -83,7 +83,7 @@ class ServerAccept:
                 self.language_name = "japanese"
 
             # self.save_file.write(buf[5:])
-            print("received data size %d , %d, language_name %s" % (data_len,  len(buf[5:]), self.language_name))
+            print("received data size %d , language_name %s" % (data_len, self.language_name))
             
         # except socket.timeout:
         #     print("time output: {0}, has closed".format(addr))
@@ -121,6 +121,7 @@ class ServerAccept:
         print("deal video thread started")
 
         ext.from_video(self.save_file_name, self.language_name)
+        # ext.from_video('received_videos/20180925110329-error.mp4', self.language_name)
         self.result_queue.put(9)
         ext.save()
         frames = ext.gui(self.language_name)
