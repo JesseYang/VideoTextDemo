@@ -914,14 +914,14 @@ class Extractor():
         def _init_models():
             # Load weights
             self.video_path = ''
-            weights_classify_frames = SaverRestore('models/classify_frames')
-            weights_detect_table = SaverRestore('models/detect_table')
-            weights_detect_text_area = SaverRestore('models/detect')
-            weights_segment_lines = SaverRestore('models/segment_lines')
-            weights_recognize_english = SaverRestore('models/recognize_english')
-            weights_recognize_chinese = SaverRestore('models/recognize_chinese')
-            weights_recognize_korean = SaverRestore('models/recognize_korean')
-            weights_recognize_japanese = SaverRestore('models/recognize_japanese')
+            weights_classify_frames = SaverRestore('/home/user/VideoText/DEMO/models/classify_frames')
+            weights_detect_table = SaverRestore('/home/user/VideoText/DEMO/models/detect_table')
+            weights_detect_text_area = SaverRestore('/home/user/VideoText/DEMO/models/detect')
+            weights_segment_lines = SaverRestore('/home/user/VideoText/DEMO/models/segment_lines')
+            weights_recognize_english = SaverRestore('/home/user/VideoText/DEMO/models/recognize_english')
+            weights_recognize_chinese = SaverRestore('/home/user/VideoText/DEMO/models/recognize_chinese')
+            weights_recognize_korean = SaverRestore('/home/user/VideoText/DEMO/models/recognize_korean')
+            weights_recognize_japanese = SaverRestore('/home/user/VideoText/DEMO/models/recognize_japanese')
             
             # Build graphs
             model_classify_frames = Model_classify_frames()
@@ -1331,7 +1331,7 @@ class Extractor():
         import os, shutil
         from datetime import datetime
         video_name  = self.video_path.split("/")[-1]
-        self.filename = 'output-' + video_name + "-" + datetime.now().strftime('%Y%m%d%H%M%S')
+        self.filename = os.path.join('/home/user/VideoText/DEMO', 'output-' + video_name + "-" + datetime.now().strftime('%Y%m%d%H%M%S'))
         filename = self.filename
         if os.path.isdir(filename):
             shutil.rmtree(filename)

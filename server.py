@@ -24,6 +24,8 @@ import pdb
 import json
 import pickle
 
+import fcntl
+
 class ServerAccept:
     def __init__(self, result_queue, host='192.168.5.41', port=8117):
         print(os.getpid())
@@ -33,14 +35,14 @@ class ServerAccept:
         self.bufsize = 10240
         self.language_name = "chinese" ## chinese:0 english:1 korean:2 japanese:3
         self.result_queue = result_queue
-        if not os.path.exists("received_videos"):
-            os.mkdir("received_videos")
+        if not os.path.exists("/home/user/VideoText/DEMO/received_videos"):
+            os.mkdir("/home/user/VideoText/DEMO/received_videos")
         # self.save_file_name = ""
         self.socket_server()
 
     def receive_data(self, conn, addr):
         a=1
-        self.save_file_name = os.path.join("received_videos", datetime.now().strftime('%Y%m%d%H%M%S')+".mp4")
+        self.save_file_name = os.path.join("/home/user/VideoText/DEMO/received_videos", datetime.now().strftime('%Y%m%d%H%M%S')+".mp4")
         save_file = open(self.save_file_name, 'wb')
         print(os.getpid())
         try:
@@ -176,7 +178,7 @@ class ServerAccept:
     def socket_send_img(self,addr):
         print(addr)
         self.result_queue.put(10)
-        imgs = os.listdir(os.path.join("test_result","gui_frames" ))
+        imgs = os.listdir(os.path.join("/home/user/VideoText/DEMO","test_result","gui_frames" ))
         print("total frame", len(imgs))
         for im in range(len(imgs)):
             try:
@@ -190,7 +192,7 @@ class ServerAccept:
                 self.result_queue.put(-6)
                 print(sys.exit(1))
 
-            filepath = os.path.join("test_result","gui_frames", str(im)+".png")
+            filepath = os.path.join("/home/user/VideoText/DEMO","test_result","gui_frames", str(im)+".png")
             # filepath = 'test.png'
             # fhead = struct.pack(b'128sl', bytes(os.path.basename(filepath), encoding='utf-8'), os.stat(filepath).st_size)
             # s.send(fhead)
@@ -241,7 +243,7 @@ class ServerAccept:
     def socket_send_txt(self,addr):
         print(addr)
         
-        imgs = os.listdir(os.path.join("test_result","gui_preds" ))
+        imgs = os.listdir(os.path.join("/home/user/VideoText/DEMO", "test_result","gui_preds" ))
         print("total text", len(imgs))
         for im in range(len(imgs)):
             try:
@@ -255,7 +257,7 @@ class ServerAccept:
                 self.result_queue.put(-8)
                 print(sys.exit(1))
 
-            filepath = os.path.join("test_result","gui_preds", str(im)+".txt")
+            filepath = os.path.join("/home/user/VideoText/DEMO", "test_result","gui_preds", str(im)+".txt")
             # filepath = 'test.png'
             # fhead = struct.pack(b'128sl', bytes(os.path.basename(filepath), encoding='utf-8'), os.stat(filepath).st_size)
             # s.send(fhead)
@@ -323,9 +325,14 @@ class ServerAccept:
         # sys.exit(1)
         
 
+def get_ip2(ifname='lo'):
+    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM) 
+    return socket.inet_ntoa(fcntl.ioctl( s.fileno(), 0x8915, struct.pack('256s', bytes(ifname[:15], 'utf-8')) )[20:24])
+
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--ip', help='ip address of server', default='192.168.5.41')
+    parser.add_argument('--ip', help='ip address of server')
     args = parser.parse_args()
     print('cfg.max_queue_len:')
    
@@ -335,7 +342,13 @@ if __name__ == '__main__':
     # time.sleep(10000)
     ext = Extractor(result_queue)
 
-    server_accept = ServerAccept(result_queue, host=args.ip)
+    #get host-server ip address
+    if args.ip != None:
+        ip = args.ip
+    else:
+        ip = get_ip2('eno1')
+
+    server_accept = ServerAccept(result_queue, host=ip)
    
     if server_accept.flage:
         # result_queue.queue.clear()
